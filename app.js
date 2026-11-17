@@ -271,6 +271,13 @@ async function loadUploadedBg() {
   } catch { return null; }
 }
 
+function importWithTimeout(url, ms = 9000) {
+  return Promise.race([
+    import(url),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Network timeout")), ms)),
+  ]);
+}
+
 async function init() {
   uploadedBgDataUrl = await loadUploadedBg();
   eventSelect.value = settings.event;
@@ -281,19 +288,25 @@ async function init() {
   syncMethodViews();
   renderAll();
 
-  try {
-    await import("https://cdn.cubing.net/v0/js/cubing/twisty");
-    updateScramblePreview();
-  } catch (err) { console.warn("TwistyPlayer failed:", err); }
+  previewModeBadge.textContent = "Loading...";
 
-  try {
-    const mod = await import("https://cdn.cubing.net/v0/js/cubing/scramble");
-    randomScrambleForEvent = mod.randomScrambleForEvent;
-    await loadNextScramble(settings.event);
-  } catch (err) {
-    console.error("Failed to load cubing/scramble:", err);
-    scrambleTextEl.textContent = "Could not load WCA scrambler. Serve over HTTPS/localhost.";
-  }
+  // Load scrambler and 3D cube in parallel so slow Wi-Fi doesn't block scrambles
+  importWithTimeout("https://cdn.cubing.net/v0/js/cubing/scramble", 9000)
+    .then((mod) => {
+      randomScrambleForEvent = mod.randomScrambleForEvent;
+      return loadNextScramble(settings.event);
+    })
+    .catch((err) => {
+      console.warn("WCA scrambler timeout/offline, using fallback:", err);
+      return loadNextScramble(settings.event);
+    });
+
+  importWithTimeout("https://cdn.cubing.net/v0/js/cubing/twisty", 12000)
+    .then(() => updateScramblePreview())
+    .catch((err) => {
+      console.warn("3D preview offline:", err);
+      previewModeBadge.textContent = "Offline";
+    });
 }
 
 function showToast(msg) {
@@ -624,25 +637,66 @@ saveCustomPresetBtn.addEventListener("click", () => {
 });
 
 // === SECTION A6: SCRAMBLES, 3D PREVIEW & TIMER STATE MACHINE ===
+
+function localFallbackScramble(eventId) {
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const mods = ["", "'", "2"];
+  const genMoves = (faces, len) => {
+    const out = [];
+    let last = "", prev2 = "";
+    for (let i = 0; i < len; i++) {
+      let f;
+      do { f = pick(faces); } while (f === last || (f[0] === last[0] && f === prev2));
+      prev2 = last; last = f;
+      out.push(f + pick(mods));
+    }
+    return out.join(" ");
+  };
+  if (eventId === "222") return genMoves(["U", "R", "F"], 9);
+  if (eventId === "444") return genMoves(["U", "D", "R", "L", "F", "B", "Uw", "Rw", "Fw"], 40);
+  if (eventId === "555") return genMoves(["U", "D", "R", "L", "F", "B", "Uw", "Dw", "Rw", "Lw", "Fw", "Bw"], 60);
+  if (eventId === "pyram") return genMoves(["U", "L", "R", "B"], 10);
+  if (eventId === "skewb") return genMoves(["U", "L", "R", "B"], 9);
+  return genMoves(["U", "D", "R", "L", "F", "B"], 20);
+}
+
 async function generateScramble(eventId) {
-  if (!randomScrambleForEvent) return "";
-  return (await randomScrambleForEvent(eventId)).toString();
+  if (!randomScrambleForEvent) {
+    try {
+      const mod = await importWithTimeout("https://cdn.cubing.net/v0/js/cubing/scramble", 4000);
+      randomScrambleForEvent = mod.randomScrambleForEvent;
+    } catch {
+      return { text: localFallbackScramble(eventId), offline: true };
+    }
+  }
+  const alg = await randomScrambleForEvent(eventId);
+  return { text: alg.toString(), offline: false };
 }
 
 async function loadNextScramble(eventId) {
   scrambleStatusEl.textContent = "Generating...";
   try {
-    let scramble;
+    let result;
     if (prefetchedScramble && prefetchedEvent === eventId) {
-      scramble = prefetchedScramble; prefetchedScramble = null; prefetchedEvent = null;
+      result = prefetchedScramble;
+      prefetchedScramble = null;
+      prefetchedEvent = null;
     } else {
-      scramble = await generateScramble(eventId);
+      result = await generateScramble(eventId);
     }
     if (eventId === settings.event) {
-      currentScramble = scramble; scrambleTextEl.textContent = currentScramble; scrambleStatusEl.textContent = "";
-      updateScramblePreview(); prefetchScramble(eventId);
+      currentScramble = result.text;
+      scrambleTextEl.textContent = currentScramble;
+      scrambleStatusEl.textContent = result.offline ? "Offline fallback (Wi-Fi)" : "";
+      updateScramblePreview();
+      if (!result.offline) prefetchScramble(eventId);
     }
-  } catch (err) { console.error(err); scrambleStatusEl.textContent = "Scramble error"; }
+  } catch (err) {
+    console.error(err);
+    currentScramble = localFallbackScramble(eventId);
+    scrambleTextEl.textContent = currentScramble;
+    scrambleStatusEl.textContent = "Offline fallback";
+  }
 }
 
 async function prefetchScramble(eventId) {
