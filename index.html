@@ -4,32 +4,45 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AlgTimer // WCA Cubing Timer & Trainer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Outfit:wght@500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
   <style>
-    /* =========================================================
-       THEME & CUSTOMIZATION VARIABLES
-       ========================================================= */
     :root {
+      /* Theme Studio Variables */
       --bg-primary: #0a0a0a;
-      --bg-surface: #121212;
-      --bg-elevated: #1b1b1b;
-      --border-color: #282828;
-      --border-strong: #424242;
+      --sidebar-bg-rgba: rgba(18, 18, 18, 0.86);
+      --sidebar-blur: 14px;
+      --card-bg-rgba: rgba(27, 27, 27, 0.78);
+      --scramble-bg-rgba: rgba(20, 20, 20, 0);
+      --border-color: rgba(255, 255, 255, 0.09);
+      --border-strong: rgba(255, 255, 255, 0.22);
 
       --text-primary: #f5f5f5;
       --text-secondary: #9a9a9a;
-      --text-muted: #5a5a5a;
+      --text-muted: #666666;
+      --accent-color: #f5f5f5;
+      --accent-contrast: #0a0a0a;
 
       --state-idle: var(--text-primary);
       --state-holding: #ef4444;
       --state-ready: #22c55e;
-      --state-running: #ffffff;
+      --state-running: var(--text-primary);
 
-      --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
-      --font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+      --font-ui: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-timer: "JetBrains Mono", ui-monospace, Menlo, monospace;
+      --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+
       --timer-size: 9.5rem;
-      --scramble-size: 1.55rem;
+      --scramble-size: 1.5rem;
       --sidebar-width: 320px;
-      --radius: 8px;
+      --radius: 10px;
+
+      /* Wallpaper controls */
+      --bg-blur: 8px;
+      --bg-dim: 0.48;
+      --bg-pos-y: 50%;
+      --bg-scale: 1.05;
     }
 
     * {
@@ -43,23 +56,54 @@
       height: 100%;
       background: var(--bg-primary);
       color: var(--text-primary);
-      font-family: var(--font-sans);
+      font-family: var(--font-ui);
       -webkit-font-smoothing: antialiased;
+      overflow: hidden;
     }
 
     .hidden {
       display: none !important;
     }
 
+    /* Fullscreen Atmosphere / Wallpaper Layer */
+    .bg-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      background: var(--bg-primary);
+      pointer-events: none;
+    }
+
+    .bg-media {
+      position: absolute;
+      inset: -30px;
+      background-size: cover;
+      background-position: 50% var(--bg-pos-y);
+      transform: scale(var(--bg-scale));
+      filter: blur(var(--bg-blur));
+      transition: filter 0.2s ease, opacity 0.2s ease, transform 0.15s ease;
+    }
+
+    .bg-dim {
+      position: absolute;
+      inset: 0;
+      background: #000000;
+      opacity: var(--bg-dim);
+      transition: opacity 0.2s ease;
+    }
+
     /* App Shell */
     .app {
+      position: relative;
+      z-index: 1;
       display: flex;
       flex-direction: column;
       height: 100vh;
       overflow: hidden;
     }
 
-    /* Focus Mode: fade surroundings while keeping layout boxes intact so timer NEVER shifts */
+    /* Focus Mode */
     .app.is-running .topbar,
     .app.is-running .left-sidebar,
     .app.is-running .right-sidebar,
@@ -69,24 +113,35 @@
       pointer-events: none;
     }
 
+    body.focus-extra-blur .app.is-running ~ .bg-layer .bg-media,
+    body.focus-extra-blur.is-solving .bg-media {
+      filter: blur(calc(var(--bg-blur) + 12px));
+    }
+
+    body.focus-dim.is-solving .bg-dim {
+      opacity: 0.85;
+    }
+
     .topbar,
     .left-sidebar,
     .right-sidebar,
     .scramble-area,
     .last-solve-actions,
     .timer-hint {
-      transition: opacity 0.12s ease;
+      transition: opacity 0.14s ease;
     }
 
-    /* Top Navigation Bar */
+    /* Top Bar */
     .topbar {
-      height: 56px;
+      height: 58px;
       flex-shrink: 0;
-      background: var(--bg-surface);
+      background: var(--sidebar-bg-rgba);
+      backdrop-filter: blur(var(--sidebar-blur));
+      -webkit-backdrop-filter: blur(var(--sidebar-blur));
       border-bottom: 1px solid var(--border-color);
-      display: flex;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
       align-items: center;
-      justify-content: space-between;
       padding: 0 1.25rem;
       gap: 1rem;
       z-index: 10;
@@ -95,7 +150,7 @@
     .topbar-left {
       display: flex;
       align-items: center;
-      gap: 1.5rem;
+      gap: 1.15rem;
     }
 
     .brand {
@@ -104,7 +159,7 @@
       gap: 0.55rem;
       font-family: var(--font-mono);
       font-weight: 700;
-      font-size: 1rem;
+      font-size: 0.98rem;
       letter-spacing: 0.04em;
     }
 
@@ -116,11 +171,11 @@
       gap: 2px;
       padding: 2px;
       border: 1px solid var(--border-strong);
-      border-radius: 4px;
+      border-radius: 5px;
     }
 
     .brand-icon span {
-      background: var(--text-primary);
+      background: var(--accent-color);
       border-radius: 1px;
     }
 
@@ -136,8 +191,8 @@
     .nav-tabs {
       display: flex;
       align-items: center;
-      gap: 0.25rem;
-      background: var(--bg-elevated);
+      gap: 2px;
+      background: var(--card-bg-rgba);
       border: 1px solid var(--border-color);
       border-radius: var(--radius);
       padding: 3px;
@@ -147,9 +202,9 @@
       background: transparent;
       border: none;
       color: var(--text-secondary);
-      padding: 0.35rem 0.8rem;
-      border-radius: 6px;
-      font-size: 0.84rem;
+      padding: 0.34rem 0.78rem;
+      border-radius: calc(var(--radius) - 3px);
+      font-size: 0.82rem;
       font-weight: 500;
       cursor: pointer;
       transition: background 0.12s, color 0.12s;
@@ -160,24 +215,48 @@
     }
 
     .nav-tab.active {
-      background: var(--text-primary);
-      color: var(--bg-primary);
+      background: var(--accent-color);
+      color: var(--accent-contrast);
       font-weight: 600;
+    }
+
+    .topbar-center {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--card-bg-rgba);
+      border: 1px solid var(--border-color);
+      border-radius: 999px;
+      padding: 0.3rem 0.85rem;
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      color: var(--text-secondary);
+    }
+
+    .status-pill strong {
+      color: var(--text-primary);
     }
 
     .topbar-right {
       display: flex;
       align-items: center;
-      gap: 0.6rem;
+      justify-content: flex-end;
+      gap: 0.55rem;
     }
 
     .select {
-      background: var(--bg-elevated);
+      background: var(--card-bg-rgba);
       color: var(--text-primary);
       border: 1px solid var(--border-color);
       border-radius: var(--radius);
-      padding: 0.4rem 0.65rem;
-      font-size: 0.84rem;
+      padding: 0.38rem 0.65rem;
+      font-size: 0.83rem;
       cursor: pointer;
     }
 
@@ -185,12 +264,12 @@
       display: flex;
       align-items: center;
       gap: 0.45rem;
-      background: var(--bg-elevated);
+      background: var(--card-bg-rgba);
       color: var(--text-primary);
       border: 1px solid var(--border-color);
       border-radius: 999px;
-      padding: 0.3rem 0.75rem 0.3rem 0.4rem;
-      font-size: 0.82rem;
+      padding: 0.28rem 0.7rem 0.28rem 0.35rem;
+      font-size: 0.8rem;
       cursor: pointer;
     }
 
@@ -202,8 +281,8 @@
       width: 22px;
       height: 22px;
       border-radius: 50%;
-      background: var(--text-primary);
-      color: var(--bg-primary);
+      background: var(--accent-color);
+      color: var(--accent-contrast);
       font-family: var(--font-mono);
       font-size: 0.72rem;
       font-weight: 700;
@@ -226,7 +305,9 @@
 
     .left-sidebar,
     .right-sidebar {
-      background: var(--bg-surface);
+      background: var(--sidebar-bg-rgba);
+      backdrop-filter: blur(var(--sidebar-blur));
+      -webkit-backdrop-filter: blur(var(--sidebar-blur));
       padding: 1rem;
       display: flex;
       flex-direction: column;
@@ -244,34 +325,34 @@
     }
 
     .panel-card {
-      background: var(--bg-elevated);
+      background: var(--card-bg-rgba);
       border: 1px solid var(--border-color);
       border-radius: var(--radius);
       padding: 0.85rem;
       display: flex;
       flex-direction: column;
-      gap: 0.65rem;
+      gap: 0.6rem;
     }
 
     .panel-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      font-size: 0.72rem;
+      font-size: 0.7rem;
       text-transform: uppercase;
-      letter-spacing: 0.07em;
+      letter-spacing: 0.08em;
       color: var(--text-secondary);
+      font-weight: 600;
     }
 
     .preview-box {
       width: 100%;
-      height: 220px;
+      height: 215px;
       display: grid;
       place-items: center;
-      position: relative;
-      background: var(--bg-primary);
+      background: rgba(0, 0, 0, 0.25);
       border: 1px solid var(--border-color);
-      border-radius: 6px;
+      border-radius: calc(var(--radius) - 2px);
       overflow: hidden;
     }
 
@@ -287,24 +368,24 @@
 
     .preview-controls .btn-outline {
       flex: 1;
-      padding: 0.35rem 0.5rem;
-      font-size: 0.78rem;
+      padding: 0.34rem 0.5rem;
+      font-size: 0.76rem;
     }
 
     /* Trend Sparkline */
     .sparkline-wrap {
       width: 100%;
-      height: 100px;
-      background: var(--bg-primary);
+      height: 98px;
+      background: rgba(0, 0, 0, 0.22);
       border: 1px solid var(--border-color);
-      border-radius: 6px;
+      border-radius: calc(var(--radius) - 2px);
       display: grid;
       place-items: center;
       overflow: hidden;
     }
 
     .sparkline-empty {
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       color: var(--text-muted);
     }
 
@@ -314,13 +395,13 @@
       justify-content: space-between;
       align-items: baseline;
       font-family: var(--font-mono);
-      font-size: 0.9rem;
+      font-size: 0.88rem;
     }
 
     .goal-bar {
       width: 100%;
       height: 7px;
-      background: var(--bg-primary);
+      background: rgba(0, 0, 0, 0.35);
       border-radius: 999px;
       overflow: hidden;
       border: 1px solid var(--border-color);
@@ -328,12 +409,12 @@
 
     .goal-fill {
       height: 100%;
-      background: var(--text-primary);
+      background: var(--accent-color);
       width: 0%;
-      transition: width 0.2s ease;
+      transition: width 0.25s ease;
     }
 
-    /* Center Stage: Scramble at TOP, Timer LOCKED at Dead-Center */
+    /* Center Stage */
     .center-stage {
       display: grid;
       grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -349,15 +430,26 @@
 
     .scramble-area {
       align-self: start;
-      padding-top: 0.35rem;
+      padding: 0.85rem 1.35rem;
+      margin-top: 0.25rem;
       text-align: center;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0.65rem;
+      gap: 0.6rem;
       max-width: 820px;
-      width: 100%;
+      width: fit-content;
       cursor: default;
+      background: var(--scramble-bg-rgba);
+      border-radius: var(--radius);
+      border: 1px solid transparent;
+      transition: background 0.15s, border-color 0.15s, opacity 0.14s ease;
+    }
+
+    .scramble-area.has-box {
+      border-color: var(--border-color);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
     }
 
     .scramble-text {
@@ -375,7 +467,7 @@
     }
 
     .scramble-status {
-      font-size: 0.76rem;
+      font-size: 0.75rem;
       color: var(--text-muted);
     }
 
@@ -384,16 +476,29 @@
       flex-direction: column;
       align-items: center;
       gap: 0.85rem;
+      padding: 1.5rem 2.75rem;
+      border-radius: calc(var(--radius) + 8px);
+      border: 1px solid transparent;
+      transition: background 0.15s, border-color 0.15s, backdrop-filter 0.15s;
+    }
+
+    .timer-core.has-backdrop {
+      background: var(--card-bg-rgba);
+      border-color: var(--border-color);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
     }
 
     .timer-display {
-      font-family: var(--font-mono);
+      font-family: var(--font-timer);
       font-variant-numeric: tabular-nums;
       font-size: clamp(4rem, var(--timer-size), 16rem);
       font-weight: 700;
       line-height: 1;
       color: var(--state-idle);
       transition: color 0.06s linear, transform 0.08s ease;
+      text-shadow: 0 4px 28px rgba(0, 0, 0, 0.35);
     }
 
     .center-stage[data-state="holding"] .timer-display {
@@ -414,11 +519,11 @@
       align-items: center;
       gap: 0.45rem;
       font-family: var(--font-mono);
-      font-size: 0.78rem;
-      color: var(--text-muted);
+      font-size: 0.76rem;
+      color: var(--text-secondary);
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      padding: 0.25rem 0.7rem;
+      padding: 0.25rem 0.75rem;
       border-radius: 999px;
       border: 1px solid transparent;
     }
@@ -436,7 +541,7 @@
 
     .center-stage[data-state="running"] .timer-hint {
       color: var(--text-secondary);
-      opacity: 0.65;
+      opacity: 0.7;
     }
 
     .status-dot {
@@ -464,11 +569,7 @@
 
     .bottom-stage {
       align-self: start;
-      padding-top: 1.25rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.75rem;
+      padding-top: 1.15rem;
     }
 
     .last-solve-actions {
@@ -477,7 +578,7 @@
       cursor: default;
     }
 
-    /* Right Sidebar: Stats + Solves */
+    /* Right Sidebar */
     .stats-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -485,17 +586,17 @@
     }
 
     .stat-card {
-      background: var(--bg-elevated);
+      background: var(--card-bg-rgba);
       border: 1px solid var(--border-color);
       border-radius: var(--radius);
       padding: 0.65rem 0.75rem;
       display: flex;
       flex-direction: column;
-      gap: 0.18rem;
+      gap: 0.16rem;
     }
 
     .stat-label {
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       text-transform: uppercase;
       letter-spacing: 0.06em;
       color: var(--text-secondary);
@@ -504,7 +605,7 @@
     .stat-value {
       font-family: var(--font-mono);
       font-variant-numeric: tabular-nums;
-      font-size: 1.1rem;
+      font-size: 1.08rem;
       font-weight: 600;
     }
 
@@ -513,23 +614,28 @@
       flex-direction: column;
       flex: 1;
       min-height: 0;
+      background: var(--card-bg-rgba);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 0.8rem;
     }
 
     .history-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.07em;
       color: var(--text-secondary);
       padding-bottom: 0.5rem;
       border-bottom: 1px solid var(--border-color);
+      font-weight: 600;
     }
 
     .history-actions {
       display: flex;
-      gap: 0.6rem;
+      gap: 0.55rem;
     }
 
     .solve-list {
@@ -544,21 +650,21 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0.45rem 0.5rem;
+      padding: 0.42rem 0.45rem;
       border-radius: 6px;
       cursor: pointer;
       font-family: var(--font-mono);
       font-variant-numeric: tabular-nums;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
     }
 
     .solve-item:hover {
-      background: var(--bg-elevated);
+      background: rgba(255, 255, 255, 0.06);
     }
 
     .solve-index {
       color: var(--text-muted);
-      font-size: 0.76rem;
+      font-size: 0.75rem;
       min-width: 2.3rem;
     }
 
@@ -568,7 +674,7 @@
 
     .solve-item-actions {
       display: flex;
-      gap: 0.25rem;
+      gap: 0.22rem;
       opacity: 0;
     }
 
@@ -581,18 +687,18 @@
       border: 1px solid var(--border-color);
       color: var(--text-secondary);
       border-radius: 4px;
-      font-size: 0.7rem;
-      padding: 0.1rem 0.34rem;
+      font-size: 0.68rem;
+      padding: 0.08rem 0.34rem;
       cursor: pointer;
     }
 
     .mini-btn:hover,
     .mini-btn.active {
-      color: var(--text-primary);
-      border-color: var(--text-primary);
+      color: var(--accent-color);
+      border-color: var(--accent-color);
     }
 
-    /* Alg Learner & CFOP Guide Views */
+    /* Alg Learner & CFOP Views */
     .page-scroll {
       height: 100%;
       overflow-y: auto;
@@ -631,19 +737,25 @@
       gap: 0.4rem;
     }
 
-    .alg-workspace {
+    .alg-workspace,
+    .stage-grid {
       display: grid;
       grid-template-columns: 320px 1fr;
       gap: 1.25rem;
       align-items: start;
     }
 
+    .stage-grid {
+      grid-template-columns: 1fr 340px;
+    }
+
     .alg-simulator {
       position: sticky;
       top: 0;
-      background: var(--bg-surface);
+      background: var(--sidebar-bg-rgba);
+      backdrop-filter: blur(var(--sidebar-blur));
       border: 1px solid var(--border-color);
-      border-radius: 12px;
+      border-radius: var(--radius);
       padding: 1rem;
       display: flex;
       flex-direction: column;
@@ -653,7 +765,7 @@
     .alg-sim-player {
       width: 100%;
       height: 240px;
-      background: var(--bg-primary);
+      background: rgba(0, 0, 0, 0.3);
       border: 1px solid var(--border-color);
       border-radius: 8px;
       overflow: hidden;
@@ -670,11 +782,13 @@
       gap: 0.75rem;
     }
 
-    .alg-card {
-      background: var(--bg-surface);
+    .alg-card,
+    .stage-card {
+      background: var(--card-bg-rgba);
+      backdrop-filter: blur(10px);
       border: 1px solid var(--border-color);
       border-radius: var(--radius);
-      padding: 0.9rem;
+      padding: 0.95rem;
       display: flex;
       flex-direction: column;
       gap: 0.5rem;
@@ -683,35 +797,39 @@
     }
 
     .alg-card:hover,
-    .alg-card.selected {
-      border-color: var(--text-primary);
+    .alg-card.selected,
+    .stage-card.active {
+      border-color: var(--accent-color);
     }
 
-    .alg-card-top {
+    .alg-card-top,
+    .stage-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 0.5rem;
     }
 
-    .alg-name {
+    .alg-name,
+    .stage-title {
       font-weight: 600;
-      font-size: 0.95rem;
+      font-size: 0.98rem;
     }
 
-    .alg-tag {
+    .alg-tag,
+    .stage-split {
       font-family: var(--font-mono);
       font-size: 0.7rem;
       color: var(--text-secondary);
       border: 1px solid var(--border-color);
-      padding: 0.1rem 0.45rem;
+      padding: 0.12rem 0.5rem;
       border-radius: 999px;
     }
 
     .alg-moves {
       font-family: var(--font-mono);
       font-size: 0.85rem;
-      background: var(--bg-elevated);
+      background: rgba(0, 0, 0, 0.28);
       border: 1px solid var(--border-color);
       border-radius: 6px;
       padding: 0.5rem 0.6rem;
@@ -732,54 +850,10 @@
       padding-top: 0.25rem;
     }
 
-    /* CFOP Guide */
-    .stage-grid {
-      display: grid;
-      grid-template-columns: 1fr 340px;
-      gap: 1.25rem;
-      align-items: start;
-    }
-
     .stage-list {
       display: flex;
       flex-direction: column;
       gap: 0.9rem;
-    }
-
-    .stage-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      padding: 1.1rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.65rem;
-      cursor: pointer;
-    }
-
-    .stage-card.active {
-      border-color: var(--text-primary);
-    }
-
-    .stage-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .stage-title {
-      font-size: 1.05rem;
-      font-weight: 700;
-    }
-
-    .stage-split {
-      font-family: var(--font-mono);
-      font-size: 0.78rem;
-      color: var(--text-secondary);
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-color);
-      padding: 0.2rem 0.55rem;
-      border-radius: 999px;
     }
 
     .stage-points {
@@ -801,7 +875,7 @@
       background: none;
       border: none;
       color: var(--text-secondary);
-      font-size: 0.76rem;
+      font-size: 0.75rem;
       cursor: pointer;
     }
 
@@ -823,16 +897,32 @@
     .btn-outline:hover,
     .btn-outline.active {
       color: var(--text-primary);
-      border-color: var(--text-primary);
+      border-color: var(--accent-color);
+    }
+
+    .btn-primary {
+      background: var(--accent-color);
+      color: var(--accent-contrast);
+      border: none;
+      border-radius: var(--radius);
+      padding: 0.55rem 1.15rem;
+      font-size: 0.84rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
     }
 
     .btn-pill {
-      background: var(--bg-surface);
+      background: var(--card-bg-rgba);
+      backdrop-filter: blur(8px);
       color: var(--text-secondary);
       border: 1px solid var(--border-color);
       border-radius: 999px;
       padding: 0.38rem 0.95rem;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       font-family: var(--font-mono);
       cursor: pointer;
     }
@@ -840,11 +930,11 @@
     .btn-pill:hover,
     .btn-pill.active {
       color: var(--text-primary);
-      border-color: var(--text-primary);
+      border-color: var(--accent-color);
     }
 
     .btn-icon {
-      background: var(--bg-elevated);
+      background: var(--card-bg-rgba);
       color: var(--text-secondary);
       border: 1px solid var(--border-color);
       border-radius: var(--radius);
@@ -865,8 +955,7 @@
     .modal {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.78);
-      backdrop-filter: blur(4px);
+      background: rgba(0, 0, 0, 0.52);
       display: grid;
       place-items: center;
       padding: 1rem;
@@ -876,19 +965,27 @@
     .modal-card {
       width: 100%;
       max-width: 440px;
-      background: var(--bg-surface);
-      border: 1px solid var(--border-color);
-      border-radius: 14px;
+      background: #111316;
+      color: #f4f4f5;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
       padding: 1.35rem;
       display: flex;
       flex-direction: column;
       gap: 1rem;
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 28px 70px rgba(0, 0, 0, 0.65);
+    }
+
+    .modal-card.modal-studio {
+      max-width: 680px;
+      max-height: 88vh;
+      padding: 0;
+      overflow: hidden;
     }
 
     .modal-card.modal-wide {
-      max-width: 600px;
-      max-height: 88vh;
+      max-width: 560px;
+      max-height: 86vh;
       padding: 0;
       overflow: hidden;
     }
@@ -899,50 +996,368 @@
       align-items: center;
     }
 
-    .settings-header {
-      padding: 1.15rem 1.4rem;
-      border-bottom: 1px solid var(--border-color);
+    .studio-header {
+      padding: 1.1rem 1.4rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
 
-    .settings-title-wrap h2 {
-      font-size: 1.05rem;
+    .studio-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+    }
+
+    .studio-badge {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      display: grid;
+      place-items: center;
+      font-size: 1rem;
+    }
+
+    .studio-title-wrap h2 {
+      font-size: 1.02rem;
       font-weight: 700;
     }
 
-    .settings-title-wrap p {
-      font-size: 0.78rem;
-      color: var(--text-secondary);
-      margin-top: 0.15rem;
+    .studio-title-wrap p {
+      font-size: 0.76rem;
+      color: #9ca3af;
+      margin-top: 0.1rem;
     }
 
-    .settings-scroll {
-      padding: 1.25rem 1.4rem;
+    .studio-scroll {
+      padding: 1.15rem 1.4rem;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 1.25rem;
+      gap: 1.15rem;
+      flex: 1;
     }
 
-    .settings-group {
+    .studio-footer {
+      padding: 0.9rem 1.4rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      background: rgba(0, 0, 0, 0.25);
+    }
+
+    .studio-section-label {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: #9ca3af;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* TrackDeck-style Mood / Accent Pills */
+    .accent-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+    }
+
+    .accent-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.42rem;
+      background: #181a1f;
+      color: #e5e7eb;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      padding: 0.34rem 0.78rem;
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .accent-pill.active {
+      border-color: var(--accent-color);
+      box-shadow: inset 0 0 0 1px var(--accent-color);
+    }
+
+    .accent-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    /* Big 2-Tab Segmented Switch (1-Click Presets vs Custom Builder) */
+    .studio-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      background: #181a1f;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 10px;
+      padding: 3px;
+      gap: 4px;
+    }
+
+    .studio-tab {
+      background: transparent;
+      border: none;
+      color: #9ca3af;
+      padding: 0.52rem 0.75rem;
+      border-radius: 8px;
+      font-size: 0.83rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .studio-tab.active {
+      background: var(--accent-color);
+      color: var(--accent-contrast);
+    }
+
+    /* Toggle Cards */
+    .toggle-card {
+      background: #17191e;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 10px;
+      padding: 0.75rem 0.95rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .toggle-card strong {
+      font-size: 0.86rem;
+      display: block;
+    }
+
+    .toggle-card small {
+      font-size: 0.74rem;
+      color: #9ca3af;
+    }
+
+    /* Preset Grids (Colors vs Scenes) */
+    .preset-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      gap: 0.6rem;
+    }
+
+    .preset-card {
+      background: #17191e;
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 10px;
+      padding: 0.6rem;
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      cursor: pointer;
+      text-align: left;
+      color: #f4f4f5;
+      position: relative;
+    }
+
+    .preset-card:hover {
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    .preset-card.active {
+      border-color: var(--accent-color);
+      box-shadow: inset 0 0 0 1px var(--accent-color);
+    }
+
+    .preset-thumb {
+      width: 52px;
+      height: 38px;
+      border-radius: 6px;
+      flex-shrink: 0;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background-size: cover;
+      background-position: center;
+    }
+
+    .preset-meta strong {
+      font-size: 0.82rem;
+      display: block;
+    }
+
+    .preset-meta small {
+      font-size: 0.71rem;
+      color: #9ca3af;
+      display: block;
+    }
+
+    .preset-del {
+      position: absolute;
+      top: 4px;
+      right: 6px;
+      background: none;
+      border: none;
+      color: #9ca3af;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+
+    /* Background Source Tabs inside Custom Builder */
+    .source-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.45rem;
+    }
+
+    .source-tab {
+      background: #17191e;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #d1d5db;
+      border-radius: 8px;
+      padding: 0.5rem;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .source-tab.active {
+      border-color: var(--accent-color);
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+      gap: 0.5rem;
+    }
+
+    .gallery-item {
+      height: 68px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background-size: cover;
+      background-position: center;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-end;
+      padding: 0.35rem 0.45rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #ffffff;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+    }
+
+    .gallery-item.active {
+      border: 2px solid var(--accent-color);
+    }
+
+    /* Color Slot Buttons */
+    .color-slots {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+      gap: 0.5rem;
+    }
+
+    .color-slot-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      background: #17191e;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 0.5rem 0.65rem;
+      color: #e5e7eb;
+      font-size: 0.78rem;
+      cursor: pointer;
+    }
+
+    .color-slot-btn:hover,
+    .color-slot-btn.active {
+      border-color: var(--accent-color);
+    }
+
+    .slot-swatch {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      flex-shrink: 0;
+    }
+
+    /* Custom Color Wheel Popover */
+    .color-picker-panel {
+      background: #17191e;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      padding: 0.9rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .wheel-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .wheel-wrap {
+      position: relative;
+      width: 152px;
+      height: 152px;
+      flex-shrink: 0;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    .wheel-cursor {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    .wheel-controls {
+      flex: 1;
       display: flex;
       flex-direction: column;
       gap: 0.6rem;
     }
 
-    .settings-group-title {
-      font-size: 0.72rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: var(--text-secondary);
-      font-weight: 600;
+    .history-swatches {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
     }
 
+    .hist-swatch {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+
+    .hist-swatch:hover {
+      transform: scale(1.12);
+    }
+
+    /* Settings Modal Rows */
     .settings-panel {
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-color);
+      background: #17191e;
+      border: 1px solid rgba(255, 255, 255, 0.09);
       border-radius: 10px;
       overflow: hidden;
     }
@@ -953,7 +1368,7 @@
       justify-content: space-between;
       gap: 1rem;
       padding: 0.8rem 1rem;
-      border-bottom: 1px solid var(--border-color);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
     }
 
     .setting-row:last-child {
@@ -966,37 +1381,31 @@
       gap: 0.55rem;
     }
 
-    .setting-label {
-      display: flex;
-      flex-direction: column;
-      gap: 0.12rem;
-    }
-
     .setting-label span {
-      font-size: 0.88rem;
-      color: var(--text-primary);
+      font-size: 0.86rem;
+      color: #f4f4f5;
       font-weight: 500;
+      display: block;
     }
 
     .setting-label small {
-      font-size: 0.75rem;
-      color: var(--text-secondary);
+      font-size: 0.74rem;
+      color: #9ca3af;
     }
 
     .setting-val {
       font-family: var(--font-mono);
-      font-size: 0.82rem;
-      color: var(--text-primary);
+      font-size: 0.8rem;
+      color: #f4f4f5;
     }
 
-    /* Custom Range Slider */
     input[type="range"] {
       -webkit-appearance: none;
       appearance: none;
       width: 100%;
       height: 5px;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
+      background: #0d0e11;
+      border: 1px solid rgba(255, 255, 255, 0.12);
       border-radius: 999px;
       outline: none;
     }
@@ -1007,11 +1416,10 @@
       width: 15px;
       height: 15px;
       border-radius: 50%;
-      background: var(--text-primary);
+      background: var(--accent-color);
       cursor: pointer;
     }
 
-    /* Toggle Switch */
     .switch {
       position: relative;
       width: 42px;
@@ -1028,8 +1436,8 @@
     .switch-track {
       position: absolute;
       inset: 0;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-strong);
+      background: #0d0e11;
+      border: 1px solid rgba(255, 255, 255, 0.22);
       border-radius: 999px;
       cursor: pointer;
       transition: background 0.15s, border-color 0.15s;
@@ -1042,26 +1450,25 @@
       height: 16px;
       left: 3px;
       top: 3px;
-      background: var(--text-secondary);
+      background: #9ca3af;
       border-radius: 50%;
       transition: transform 0.15s, background 0.15s;
     }
 
     .switch input:checked + .switch-track {
-      background: var(--text-primary);
-      border-color: var(--text-primary);
+      background: var(--accent-color);
+      border-color: var(--accent-color);
     }
 
     .switch input:checked + .switch-track::after {
       transform: translateX(18px);
-      background: var(--bg-primary);
+      background: var(--accent-contrast);
     }
 
-    /* Segmented Control */
     .segmented {
       display: inline-flex;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
+      background: #0d0e11;
+      border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 7px;
       padding: 2px;
       gap: 2px;
@@ -1070,67 +1477,18 @@
     .seg-btn {
       background: transparent;
       border: none;
-      color: var(--text-secondary);
+      color: #9ca3af;
       font-family: var(--font-mono);
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       padding: 0.3rem 0.65rem;
       border-radius: 5px;
       cursor: pointer;
     }
 
     .seg-btn.active {
-      background: var(--text-primary);
-      color: var(--bg-primary);
+      background: var(--accent-color);
+      color: var(--accent-contrast);
       font-weight: 600;
-    }
-
-    /* Styled Color Swatches */
-    .swatch-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
-      gap: 0.55rem;
-      padding: 0.85rem;
-    }
-
-    .swatch-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 0.5rem;
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 0.45rem 0.6rem;
-      font-size: 0.78rem;
-      color: var(--text-secondary);
-      cursor: pointer;
-    }
-
-    .swatch-item input[type="color"] {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 24px;
-      height: 24px;
-      border: 1px solid var(--border-strong);
-      border-radius: 6px;
-      background: transparent;
-      cursor: pointer;
-      padding: 0;
-    }
-
-    .swatch-item input[type="color"]::-webkit-color-swatch-wrapper {
-      padding: 0;
-    }
-
-    .swatch-item input[type="color"]::-webkit-color-swatch {
-      border: none;
-      border-radius: 5px;
-    }
-
-    .preset-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.45rem;
     }
 
     .modal-body {
@@ -1144,16 +1502,17 @@
       flex-direction: column;
       gap: 0.35rem;
       font-size: 0.86rem;
-      color: var(--text-secondary);
+      color: #9ca3af;
     }
 
     .input-text {
-      background: var(--bg-elevated);
-      color: var(--text-primary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius);
+      background: #17191e;
+      color: #f4f4f5;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
       padding: 0.45rem 0.65rem;
-      font-size: 0.88rem;
+      font-size: 0.86rem;
+      font-family: var(--font-mono);
     }
 
     .full-width {
@@ -1167,9 +1526,9 @@
 
     .solve-modal-scramble {
       font-family: var(--font-mono);
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius);
+      background: #17191e;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
       padding: 0.75rem;
       font-size: 0.9rem;
       line-height: 1.5;
@@ -1180,14 +1539,13 @@
       gap: 0.5rem;
     }
 
-    /* Toast Notification */
     .toast {
       position: fixed;
       bottom: 1.5rem;
       left: 50%;
       transform: translateX(-50%);
-      background: var(--text-primary);
-      color: var(--bg-primary);
+      background: var(--accent-color);
+      color: var(--accent-contrast);
       font-size: 0.84rem;
       font-weight: 600;
       padding: 0.55rem 1.1rem;
@@ -1196,12 +1554,23 @@
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
     }
 
-    /* Responsive */
-    @media (max-width: 980px) {
+    @media (max-width: 1020px) {
+      html, body {
+        overflow: auto;
+      }
+
       .app {
         height: auto;
         min-height: 100vh;
-        overflow: auto;
+        overflow: visible;
+      }
+
+      .topbar {
+        grid-template-columns: 1fr auto;
+      }
+
+      .topbar-center {
+        display: none;
       }
 
       .timer-layout {
@@ -1238,6 +1607,12 @@
   </style>
 </head>
 <body>
+  <!-- Fullscreen Background / Wallpaper Layer -->
+  <div id="bg-layer" class="bg-layer" aria-hidden="true">
+    <div id="bg-media" class="bg-media"></div>
+    <div id="bg-dim" class="bg-dim"></div>
+  </div>
+
   <div id="app" class="app">
     <!-- Top Bar -->
     <header class="topbar">
@@ -1258,6 +1633,14 @@
         </nav>
       </div>
 
+      <div class="topbar-center">
+        <div class="status-pill">
+          <strong id="topbar-event-pill">3x3x3</strong>
+          <span>•</span>
+          <span id="topbar-ao5-pill">Ao5: -</span>
+        </div>
+      </div>
+
       <div class="topbar-right">
         <select id="event-select" class="select" aria-label="WCA Event">
           <option value="333">3x3x3</option>
@@ -1275,7 +1658,8 @@
           <option value="minx">Megaminx</option>
         </select>
 
-        <button id="settings-btn" class="btn-icon" type="button" aria-label="Customize Settings" title="Customize">⚙</button>
+        <button id="theme-btn" class="btn-icon" type="button" aria-label="Theme & Stage Studio" title="Theme & Appearance">🎨</button>
+        <button id="settings-btn" class="btn-icon" type="button" aria-label="Timer Settings" title="Timer Settings">⚙</button>
 
         <button id="profile-btn" class="profile-pill" type="button" title="Local Profile">
           <span id="profile-avatar" class="avatar">C</span>
@@ -1312,7 +1696,7 @@
         <div class="panel-card">
           <div class="panel-header">
             <span>Session Trend</span>
-            <span id="trend-range-label">Last 25</span>
+            <span>Last 25</span>
           </div>
           <div id="sparkline-wrap" class="sparkline-wrap">
             <span class="sparkline-empty">Complete 2+ solves for graph</span>
@@ -1334,9 +1718,9 @@
         </div>
       </aside>
 
-      <!-- Center Stage: Scramble near TOP, Timer DEAD-CENTER -->
+      <!-- Center Stage -->
       <section id="timer-zone" class="center-stage" data-state="idle">
-        <div class="scramble-area">
+        <div id="scramble-area" class="scramble-area">
           <p id="scramble-text" class="scramble-text">Loading scramble...</p>
           <div class="scramble-controls">
             <span id="scramble-status" class="scramble-status"></span>
@@ -1345,7 +1729,7 @@
           </div>
         </div>
 
-        <div class="timer-core">
+        <div id="timer-core" class="timer-core">
           <div id="timer-display" class="timer-display">0.00</div>
           <div id="timer-hint" class="timer-hint">
             <span class="status-dot" aria-hidden="true"></span>
@@ -1362,7 +1746,7 @@
         </div>
       </section>
 
-      <!-- Right Sidebar: Stats + Solves + Import -->
+      <!-- Right Sidebar -->
       <aside class="right-sidebar">
         <section class="stats-grid" aria-label="Session Statistics">
           <div class="stat-card">
@@ -1477,24 +1861,270 @@
     </section>
   </div>
 
-  <!-- Hidden File Input for csTimer / AlgTimer Import -->
+  <!-- Hidden File Inputs -->
   <input id="import-file-input" type="file" accept=".json,.txt" class="hidden" />
+  <input id="bg-image-input" type="file" accept="image/*" class="hidden" />
 
-  <!-- CLEANER SETTINGS MODAL -->
+  <!-- =========================================================
+       THEME & STAGE STUDIO MODAL (TrackDeck Style + Preview/Apply)
+       ========================================================= -->
+  <div id="theme-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="theme-studio-title">
+    <div class="modal-card modal-studio">
+      <div class="studio-header">
+        <div class="studio-title-wrap">
+          <div class="studio-badge">🎨</div>
+          <div>
+            <h2 id="theme-studio-title">Stage &amp; Theme Studio</h2>
+            <p>Preview changes live behind this window, then click Apply</p>
+          </div>
+        </div>
+        <button id="close-theme-btn" class="btn-icon" type="button" aria-label="Close">✕</button>
+      </div>
+
+      <div class="studio-scroll">
+        <!-- Quick Accent & Mood Pills -->
+        <div>
+          <div class="studio-section-label" style="margin-bottom:0.45rem;">
+            <span>Quick Accent &amp; Base Mood</span>
+            <span id="active-mood-label">Mono</span>
+          </div>
+          <div id="accent-pills" class="accent-pills"></div>
+        </div>
+
+        <!-- 2-Tab Switch -->
+        <div class="studio-tabs">
+          <button class="studio-tab active" data-studio-tab="presets" type="button">1-Click Vibe Presets</button>
+          <button class="studio-tab" data-studio-tab="custom" type="button">Custom Stage Builder</button>
+        </div>
+
+        <!-- Global Backdrop Toggles -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.55rem;">
+          <div class="toggle-card">
+            <div>
+              <strong>Timer Backdrop Box</strong>
+              <small>Frosted card behind timer</small>
+            </div>
+            <label class="switch">
+              <input id="theme-timer-box" type="checkbox" />
+              <span class="switch-track"></span>
+            </label>
+          </div>
+
+          <div class="toggle-card">
+            <div>
+              <strong>Scramble Box</strong>
+              <small>Tinted card behind scramble</small>
+            </div>
+            <label class="switch">
+              <input id="theme-scramble-box" type="checkbox" />
+              <span class="switch-track"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- TAB 1: 1-CLICK PRESETS (Separated: Colors vs Scenes) -->
+        <div id="studio-pane-presets" style="display:flex; flex-direction:column; gap:1rem;">
+          <div>
+            <div class="studio-section-label" style="margin-bottom:0.5rem;">
+              <span>Color Themes</span>
+              <span>Clean &amp; fast</span>
+            </div>
+            <div id="color-presets-grid" class="preset-grid"></div>
+          </div>
+
+          <div>
+            <div class="studio-section-label" style="margin-bottom:0.5rem;">
+              <span>Scene + Matched Color Themes</span>
+              <span>Atmospheric wallpapers</span>
+            </div>
+            <div id="scene-presets-grid" class="preset-grid"></div>
+          </div>
+
+          <div id="saved-presets-section" class="hidden">
+            <div class="studio-section-label" style="margin-bottom:0.5rem;">
+              <span>Your Saved Custom Themes</span>
+            </div>
+            <div id="saved-presets-grid" class="preset-grid"></div>
+          </div>
+        </div>
+
+        <!-- TAB 2: CUSTOM STAGE BUILDER -->
+        <div id="studio-pane-custom" class="hidden" style="display:flex; flex-direction:column; gap:1rem;">
+          <!-- 1. Main Background Source -->
+          <div style="display:flex; flex-direction:column; gap:0.55rem;">
+            <div class="studio-section-label"><span>1. Main Background Source</span></div>
+            <div class="source-tabs">
+              <button class="source-tab active" data-bg-mode="color" type="button">Solid Color</button>
+              <button class="source-tab" data-bg-mode="scene" type="button">Premade Scenes</button>
+              <button class="source-tab" data-bg-mode="upload" type="button">Upload Photo</button>
+            </div>
+
+            <div id="bg-source-scene" class="hidden">
+              <div id="gallery-grid" class="gallery-grid"></div>
+            </div>
+
+            <div id="bg-source-upload" class="hidden">
+              <div class="toggle-card">
+                <div>
+                  <strong id="upload-status-text">Upload your own wallpaper</strong>
+                  <small>Saved locally in browser storage (JPG, PNG, WebP)</small>
+                </div>
+                <button id="upload-bg-btn" class="btn-outline" type="button">Choose Image</button>
+              </div>
+            </div>
+
+            <!-- Wallpaper Adjustment Sliders -->
+            <div id="bg-sliders-panel" class="settings-panel">
+              <div class="setting-row col">
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="font-size:0.82rem;">Blur Intensity</span>
+                  <strong id="bg-blur-val" class="setting-val">8px</strong>
+                </div>
+                <input id="theme-bg-blur" type="range" min="0" max="28" step="1" />
+              </div>
+              <div class="setting-row col">
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="font-size:0.82rem;">Dark Tint (Contrast)</span>
+                  <strong id="bg-dim-val" class="setting-val">48%</strong>
+                </div>
+                <input id="theme-bg-dim" type="range" min="0" max="85" step="2" />
+              </div>
+              <div class="setting-row col">
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="font-size:0.82rem;">Vertical Crop Position</span>
+                  <strong id="bg-posy-val" class="setting-val">50%</strong>
+                </div>
+                <input id="theme-bg-posy" type="range" min="0" max="100" step="1" />
+              </div>
+              <div class="setting-row col">
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="font-size:0.82rem;">Zoom / Scale</span>
+                  <strong id="bg-scale-val" class="setting-val">105%</strong>
+                </div>
+                <input id="theme-bg-scale" type="range" min="100" max="150" step="1" />
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Surface & Element Colors + Color Wheel -->
+          <div style="display:flex; flex-direction:column; gap:0.55rem;">
+            <div class="studio-section-label">
+              <span>2. Colors (Click any slot to open wheel)</span>
+            </div>
+            <div id="color-slots" class="color-slots"></div>
+
+            <!-- Custom Color Wheel + History -->
+            <div id="color-picker-panel" class="color-picker-panel">
+              <div class="studio-section-label">
+                <span>Editing: <strong id="wheel-slot-name" style="color:#fff;">Main Background</strong></span>
+                <span id="wheel-hex-badge">#0A0A0A</span>
+              </div>
+              <div class="wheel-row">
+                <div id="wheel-wrap" class="wheel-wrap">
+                  <canvas id="color-wheel-canvas" width="152" height="152"></canvas>
+                  <div id="wheel-cursor" class="wheel-cursor" style="left:76px; top:76px;"></div>
+                </div>
+                <div class="wheel-controls">
+                  <label class="field">
+                    <span>Brightness</span>
+                    <input id="wheel-val-slider" type="range" min="0" max="100" step="1" />
+                  </label>
+                  <label class="field">
+                    <span>Hex Color</span>
+                    <input id="wheel-hex-input" class="input-text" type="text" maxlength="7" placeholder="#FFFFFF" />
+                  </label>
+                </div>
+              </div>
+              <div>
+                <div class="studio-section-label" style="margin-bottom:0.4rem;">
+                  <span>Previous Color History</span>
+                  <button id="clear-history-btn" class="btn-text" type="button">Clear</button>
+                </div>
+                <div id="color-history-swatches" class="history-swatches"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Surfaces, Fonts & Shape -->
+          <div style="display:flex; flex-direction:column; gap:0.55rem;">
+            <div class="studio-section-label"><span>3. Glass, Fonts &amp; Shape</span></div>
+            <div class="settings-panel">
+              <div class="setting-row col">
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="font-size:0.82rem;">Sidebar Opacity</span>
+                  <strong id="sidebar-alpha-val" class="setting-val">86%</strong>
+                </div>
+                <input id="theme-sidebar-alpha" type="range" min="20" max="100" step="2" />
+              </div>
+              <div class="setting-row col">
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="font-size:0.82rem;">Sidebar Frosted Blur</span>
+                  <strong id="sidebar-blur-val" class="setting-val">14px</strong>
+                </div>
+                <input id="theme-sidebar-blur" type="range" min="0" max="28" step="1" />
+              </div>
+              <div class="setting-row col">
+                <div style="display:flex; justify-content:space-between;">
+                  <span style="font-size:0.82rem;">Corner Roundness</span>
+                  <strong id="radius-val" class="setting-val">10px</strong>
+                </div>
+                <input id="theme-radius" type="range" min="0" max="20" step="1" />
+              </div>
+              <div class="setting-row">
+                <span style="font-size:0.84rem;">Timer Font</span>
+                <select id="theme-timer-font" class="select">
+                  <option value='"JetBrains Mono", ui-monospace, monospace'>JetBrains Mono</option>
+                  <option value='"IBM Plex Mono", ui-monospace, monospace'>IBM Plex Mono</option>
+                  <option value='"Space Grotesk", sans-serif'>Space Grotesk</option>
+                  <option value='"Outfit", sans-serif'>Outfit</option>
+                  <option value='"Inter", sans-serif'>Inter</option>
+                </select>
+              </div>
+              <div class="setting-row">
+                <span style="font-size:0.84rem;">UI Font</span>
+                <select id="theme-ui-font" class="select">
+                  <option value='"Inter", -apple-system, sans-serif'>Inter</option>
+                  <option value='"Space Grotesk", sans-serif'>Space Grotesk</option>
+                  <option value='"Outfit", sans-serif'>Outfit</option>
+                  <option value='"JetBrains Mono", ui-monospace, monospace'>JetBrains Mono</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="studio-footer">
+        <div style="display:flex; gap:0.5rem;">
+          <button id="save-custom-preset-btn" class="btn-outline" type="button">+ Save as Preset</button>
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+          <button id="cancel-theme-btn" class="btn-outline" type="button">Cancel</button>
+          <button id="apply-theme-btn" class="btn-primary" type="button">Apply Theme</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       TIMER SETTINGS MODAL (Mechanics & Data)
+       ========================================================= -->
   <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
     <div class="modal-card modal-wide">
-      <div class="settings-header">
-        <div class="settings-title-wrap">
-          <h2 id="settings-title">Customize AlgTimer</h2>
-          <p>Changes save automatically to your browser</p>
+      <div class="studio-header">
+        <div class="studio-title-wrap">
+          <div class="studio-badge">⚙</div>
+          <div>
+            <h2 id="settings-title">Timer Settings</h2>
+            <p>Timing rules, sizing, and csTimer data</p>
+          </div>
         </div>
         <button id="close-settings-btn" class="btn-icon" type="button" aria-label="Close">✕</button>
       </div>
 
-      <div class="settings-scroll">
-        <!-- Group 1: Timer & Controls -->
-        <div class="settings-group">
-          <div class="settings-group-title">Timer &amp; Controls</div>
+      <div class="studio-scroll">
+        <div style="display:flex; flex-direction:column; gap:0.55rem;">
+          <div class="studio-section-label"><span>Timer &amp; Focus</span></div>
           <div class="settings-panel">
             <div class="setting-row col">
               <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -1528,32 +2158,41 @@
                 <span class="switch-track"></span>
               </label>
             </div>
+
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Background During Solve</span>
+                <small>What happens to your wallpaper while Focus Mode is active</small>
+              </div>
+              <select id="setting-focus-bg" class="select">
+                <option value="blur">Keep + Extra Blur</option>
+                <option value="same">Keep Unchanged</option>
+                <option value="dim">Dim Dark</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <!-- Group 2: Layout & Sizing -->
-        <div class="settings-group">
-          <div class="settings-group-title">Sizing &amp; Layout</div>
+        <div style="display:flex; flex-direction:column; gap:0.55rem;">
+          <div class="studio-section-label"><span>Sizing</span></div>
           <div class="settings-panel">
             <div class="setting-row col">
               <div style="display:flex; justify-content:space-between;">
-                <span style="font-size:0.88rem; font-weight:500;">Timer Size</span>
+                <span style="font-size:0.86rem;">Timer Size</span>
                 <strong id="timer-size-value" class="setting-val">9.5rem</strong>
               </div>
               <input id="setting-timer-size" type="range" min="5" max="15" step="0.5" />
             </div>
-
             <div class="setting-row col">
               <div style="display:flex; justify-content:space-between;">
-                <span style="font-size:0.88rem; font-weight:500;">Scramble Size</span>
-                <strong id="scramble-size-value" class="setting-val">1.55rem</strong>
+                <span style="font-size:0.86rem;">Scramble Size</span>
+                <strong id="scramble-size-value" class="setting-val">1.5rem</strong>
               </div>
               <input id="setting-scramble-size" type="range" min="1" max="2.5" step="0.05" />
             </div>
-
             <div class="setting-row col">
               <div style="display:flex; justify-content:space-between;">
-                <span style="font-size:0.88rem; font-weight:500;">Sidebar Width</span>
+                <span style="font-size:0.86rem;">Sidebar Width</span>
                 <strong id="sidebar-width-value" class="setting-val">320px</strong>
               </div>
               <input id="setting-sidebar-width" type="range" min="250" max="380" step="10" />
@@ -1561,42 +2200,8 @@
           </div>
         </div>
 
-        <!-- Group 3: Colors & Presets -->
-        <div class="settings-group">
-          <div class="settings-group-title">Colors &amp; State Indicators</div>
-          <div class="settings-panel">
-            <div class="swatch-grid">
-              <label class="swatch-item">
-                <span>Background</span>
-                <input id="setting-bg-color" type="color" />
-              </label>
-              <label class="swatch-item">
-                <span>Text</span>
-                <input id="setting-text-color" type="color" />
-              </label>
-              <label class="swatch-item">
-                <span>Holding</span>
-                <input id="setting-holding-color" type="color" />
-              </label>
-              <label class="swatch-item">
-                <span>Ready</span>
-                <input id="setting-ready-color" type="color" />
-              </label>
-            </div>
-            <div class="setting-row">
-              <span style="font-size:0.82rem; color:var(--text-secondary);">Quick Presets</span>
-              <div class="preset-row">
-                <button class="btn-outline" data-preset="classic" type="button">Mono + Red/Green</button>
-                <button class="btn-outline" data-preset="pure-mono" type="button">Pure Mono</button>
-                <button class="btn-outline" data-preset="light" type="button">Light</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Group 4: Data -->
-        <div class="settings-group">
-          <div class="settings-group-title">Data &amp; Backup</div>
+        <div style="display:flex; flex-direction:column; gap:0.55rem;">
+          <div class="studio-section-label"><span>Data &amp; Backup</span></div>
           <div class="settings-panel">
             <div class="setting-row">
               <div class="setting-label">
@@ -1604,13 +2209,6 @@
                 <small>Supports csTimer .txt/.json exports &amp; AlgTimer backups</small>
               </div>
               <button id="settings-import-btn" class="btn-outline" type="button">Choose File</button>
-            </div>
-            <div class="setting-row">
-              <div class="setting-label">
-                <span>Reset Appearance</span>
-                <small>Restore default monochrome layout &amp; sizes</small>
-              </div>
-              <button id="reset-theme-btn" class="btn-outline" type="button">Reset Defaults</button>
             </div>
           </div>
         </div>
@@ -1639,8 +2237,8 @@
             <option value="Beginner">Beginner Layer-by-Layer</option>
           </select>
         </label>
-        <p class="muted-text">Saved locally in your browser. Cloud sync &amp; accounts can be added later.</p>
-        <button id="save-profile-btn" class="btn-outline full-width" type="button">Save Profile</button>
+        <p class="muted-text">Saved locally in your browser.</p>
+        <button id="save-profile-btn" class="btn-primary full-width" type="button">Save Profile</button>
       </div>
     </div>
   </div>
@@ -1670,56 +2268,365 @@
     let randomScrambleForEvent = null;
 
     const STORAGE_SOLVES_KEY = "algtimer_solves_v1";
-    const STORAGE_SETTINGS_KEY = "algtimer_settings_v1";
+    const STORAGE_SETTINGS_KEY = "algtimer_settings_v2";
+    const STORAGE_THEME_KEY = "algtimer_theme_v1";
+    const STORAGE_CUSTOM_PRESETS_KEY = "algtimer_custom_presets_v1";
+    const STORAGE_COLOR_HISTORY_KEY = "algtimer_color_history_v1";
     const STORAGE_LEARNED_KEY = "algtimer_learned_v1";
 
-    const EVENT_TO_PUZZLE = {
-      "333": "3x3x3",
-      "222": "2x2x2",
-      "444": "4x4x4",
-      "555": "5x5x5",
-      "666": "6x6x6",
-      "777": "7x7x7",
-      "333oh": "3x3x3",
-      "333bf": "3x3x3",
-      "pyram": "pyraminx",
-      "skewb": "skewb",
-      "sq1": "square1",
-      "clock": "clock",
-      "minx": "megaminx",
+    // ---------- Offline-Proof SVG Scene Generators (Zero External Image 404s) ----------
+    const svgUri = (svg) => `url("data:image/svg+xml;utf8,${encodeURIComponent(svg.trim())}")`;
+
+    const PREMADE_SCENES = [
+      {
+        id: "mountains",
+        name: "Midnight Peaks",
+        uri: svgUri(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 800'>
+          <defs>
+            <linearGradient id='g' x1='0' y1='0' x2='0' y2='1'>
+              <stop offset='0%' stop-color='#0b132b'/>
+              <stop offset='55%' stop-color='#1c2541'/>
+              <stop offset='100%' stop-color='#0b0f19'/>
+            </linearGradient>
+            <radialGradient id='m' cx='72%' cy='24%' r='35%'>
+              <stop offset='0%' stop-color='#6fffe9' stop-opacity='0.35'/>
+              <stop offset='100%' stop-color='#1c2541' stop-opacity='0'/>
+            </radialGradient>
+          </defs>
+          <rect width='1200' height='800' fill='url(#g)'/>
+          <rect width='1200' height='800' fill='url(#m)'/>
+          <path d='M0 560 L180 410 L350 510 L570 320 L780 480 L980 350 L1200 490 L1200 800 L0 800 Z' fill='#141c33'/>
+          <path d='M0 640 L240 500 L440 600 L690 430 L920 580 L1110 470 L1200 540 L1200 800 L0 800 Z' fill='#0e1424'/>
+          <path d='M0 710 L320 620 L620 690 L930 610 L1200 680 L1200 800 L0 800 Z' fill='#080b14'/>
+        </svg>`),
+      },
+      {
+        id: "tokyo-rain",
+        name: "Tokyo Drizzle",
+        uri: svgUri(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 800'>
+          <defs>
+            <linearGradient id='sky' x1='0' y1='0' x2='1' y2='1'>
+              <stop offset='0%' stop-color='#0f172a'/>
+              <stop offset='60%' stop-color='#1e293b'/>
+              <stop offset='100%' stop-color='#090d16'/>
+            </linearGradient>
+            <radialGradient id='glow1' cx='28%' cy='42%' r='35%'>
+              <stop offset='0%' stop-color='#10b981' stop-opacity='0.35'/>
+              <stop offset='100%' stop-color='#0f172a' stop-opacity='0'/>
+            </radialGradient>
+            <radialGradient id='glow2' cx='75%' cy='55%' r='35%'>
+              <stop offset='0%' stop-color='#38bdf8' stop-opacity='0.3'/>
+              <stop offset='100%' stop-color='#0f172a' stop-opacity='0'/>
+            </radialGradient>
+          </defs>
+          <rect width='1200' height='800' fill='url(#sky)'/>
+          <rect width='1200' height='800' fill='url(#glow1)'/>
+          <rect width='1200' height='800' fill='url(#glow2)'/>
+          <g fill='#090e1a' opacity='0.85'>
+            <rect x='60' y='340' width='90' height='460'/>
+            <rect x='170' y='260' width='110' height='540'/>
+            <rect x='300' y='390' width='80' height='410'/>
+            <rect x='420' y='210' width='130' height='590'/>
+            <rect x='580' y='310' width='95' height='490'/>
+            <rect x='700' y='190' width='120' height='610'/>
+            <rect x='850' y='290' width='110' height='510'/>
+            <rect x='990' y='240' width='140' height='560'/>
+          </g>
+          <g stroke='#94a3b8' stroke-opacity='0.22' stroke-width='2'>
+            <line x1='150' y1='40' x2='120' y2='140'/><line x1='380' y1='90' x2='350' y2='210'/>
+            <line x1='620' y1='30' x2='590' y2='150'/><line x1='890' y1='80' x2='860' y2='190'/>
+            <line x1='1050' y1='50' x2='1020' y2='170'/><line x1='260' y1='300' x2='230' y2='420'/>
+            <line x1='760' y1='250' x2='730' y2='370'/>
+          </g>
+        </svg>`),
+      },
+      {
+        id: "hearth",
+        name: "Hearth Ember",
+        uri: svgUri(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 800'>
+          <defs>
+            <radialGradient id='fire' cx='50%' cy='72%' r='65%'>
+              <stop offset='0%' stop-color='#f59e0b' stop-opacity='0.55'/>
+              <stop offset='40%' stop-color='#9a3412' stop-opacity='0.45'/>
+              <stop offset='100%' stop-color='#0c0908'/>
+            </radialGradient>
+          </defs>
+          <rect width='1200' height='800' fill='#0c0908'/>
+          <rect width='1200' height='800' fill='url(#fire)'/>
+          <circle cx='340' cy='520' r='4' fill='#fbbf24' opacity='0.6'/>
+          <circle cx='580' cy='430' r='5' fill='#f59e0b' opacity='0.5'/>
+          <circle cx='780' cy='500' r='3' fill='#fde68a' opacity='0.7'/>
+          <circle cx='640' cy='320' r='3' fill='#fb923c' opacity='0.45'/>
+        </svg>`),
+      },
+      {
+        id: "solar-dusk",
+        name: "Solar Dusk",
+        uri: svgUri(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 800'>
+          <defs>
+            <linearGradient id='dusk' x1='0' y1='0' x2='0.8' y2='1'>
+              <stop offset='0%' stop-color='#1e1b4b'/>
+              <stop offset='50%' stop-color='#4c1d95'/>
+              <stop offset='100%' stop-color='#0f0a19'/>
+            </linearGradient>
+            <radialGradient id='sun' cx='50%' cy='46%' r='38%'>
+              <stop offset='0%' stop-color='#fb7185' stop-opacity='0.6'/>
+              <stop offset='60%' stop-color='#f59e0b' stop-opacity='0.2'/>
+              <stop offset='100%' stop-color='#1e1b4b' stop-opacity='0'/>
+            </radialGradient>
+          </defs>
+          <rect width='1200' height='800' fill='url(#dusk)'/>
+          <rect width='1200' height='800' fill='url(#sun)'/>
+          <path d='M0 570 Q300 490 600 560 T1200 540 L1200 800 L0 800 Z' fill='#140d26'/>
+          <path d='M0 660 Q360 610 720 670 T1200 640 L1200 800 L0 800 Z' fill='#0b0716'/>
+        </svg>`),
+      },
+      {
+        id: "aurora",
+        name: "Aurora Night",
+        uri: svgUri(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 800'>
+          <defs>
+            <linearGradient id='n' x1='0' y1='0' x2='0' y2='1'>
+              <stop offset='0%' stop-color='#040814'/>
+              <stop offset='100%' stop-color='#0a192f'/>
+            </linearGradient>
+            <linearGradient id='au' x1='0' y1='0' x2='1' y2='0.6'>
+              <stop offset='0%' stop-color='#06b6d4' stop-opacity='0'/>
+              <stop offset='35%' stop-color='#2dd4bf' stop-opacity='0.45'/>
+              <stop offset='65%' stop-color='#818cf8' stop-opacity='0.4'/>
+              <stop offset='100%' stop-color='#06b6d4' stop-opacity='0'/>
+            </linearGradient>
+          </defs>
+          <rect width='1200' height='800' fill='url(#n)'/>
+          <path d='M-50 320 C240 160, 480 420, 780 220 C980 100, 1100 260, 1260 180 L1260 520 C960 420, 620 600, 320 460 C120 380, 20 460, -50 490 Z' fill='url(#au)'/>
+          <path d='M0 680 L280 580 L520 650 L840 560 L1200 670 L1200 800 L0 800 Z' fill='#050914'/>
+        </svg>`),
+      },
+    ];
+
+    const QUICK_MOODS = [
+      { id: "mono", name: "Mono", dot: "#f5f5f5", accent: "#f5f5f5", bg: "#0a0a0a", sidebar: "#121212", card: "#1b1b1b", text: "#f5f5f5", muted: "#9a9a9a" },
+      { id: "emerald", name: "Dark", dot: "#10b981", accent: "#10b981", bg: "#090c10", sidebar: "#10141b", card: "#171c26", text: "#f3f4f6", muted: "#9ca3af" },
+      { id: "neon", name: "Neon", dot: "#ec4899", accent: "#ec4899", bg: "#09090e", sidebar: "#11101a", card: "#191726", text: "#faf5ff", muted: "#a78bfa" },
+      { id: "aqua", name: "Aqua", dot: "#06b6d4", accent: "#06b6d4", bg: "#071018", sidebar: "#0d1824", card: "#132233", text: "#ecfeff", muted: "#7dd3fc" },
+      { id: "amber", name: "Amber", dot: "#f59e0b", accent: "#f59e0b", bg: "#110d0a", sidebar: "#1a1410", card: "#241b15", text: "#fef3c7", muted: "#d97706" },
+      { id: "oled", name: "Oled", dot: "#e5e5e5", accent: "#ffffff", bg: "#000000", sidebar: "#050505", card: "#0d0d0d", text: "#ffffff", muted: "#737373" },
+      { id: "light", name: "Light", dot: "#111111", accent: "#111111", bg: "#f4f3ef", sidebar: "#ffffff", card: "#eae8e1", text: "#111111", muted: "#6b7280" },
+    ];
+
+    // Premade Color Themes (mostly colors, clean & instant)
+    const COLOR_PRESETS = [
+      {
+        id: "c-mono",
+        name: "Noir Monochrome",
+        desc: "Matte black & crisp white",
+        theme: {
+          mood: "mono", bgMode: "color", bgColor: "#0a0a0a", sidebarColor: "#121212", cardColor: "#1b1b1b",
+          scrambleColor: "#141414", textColor: "#f5f5f5", mutedColor: "#9a9a9a", accentColor: "#f5f5f5",
+          holdingColor: "#ef4444", readyColor: "#22c55e", sidebarAlpha: 92, sidebarBlur: 12,
+          timerBackdrop: false, scrambleBox: false, radius: 10,
+        },
+      },
+      {
+        id: "c-emerald",
+        name: "Emerald Deck",
+        desc: "TrackDeck-style dark slate",
+        theme: {
+          mood: "emerald", bgMode: "color", bgColor: "#090c10", sidebarColor: "#10141b", cardColor: "#171c26",
+          scrambleColor: "#141922", textColor: "#f3f4f6", mutedColor: "#9ca3af", accentColor: "#10b981",
+          holdingColor: "#ef4444", readyColor: "#10b981", sidebarAlpha: 90, sidebarBlur: 14,
+          timerBackdrop: false, scrambleBox: true, radius: 12,
+        },
+      },
+      {
+        id: "c-oled",
+        name: "OLED Pitch",
+        desc: "True #000000 pure dark",
+        theme: {
+          mood: "oled", bgMode: "color", bgColor: "#000000", sidebarColor: "#050505", cardColor: "#0d0d0d",
+          scrambleColor: "#0a0a0a", textColor: "#ffffff", mutedColor: "#737373", accentColor: "#ffffff",
+          holdingColor: "#ef4444", readyColor: "#22c55e", sidebarAlpha: 96, sidebarBlur: 8,
+          timerBackdrop: false, scrambleBox: false, radius: 6,
+        },
+      },
+      {
+        id: "c-aqua",
+        name: "Arctic Aqua",
+        desc: "Deep ocean & cyan glow",
+        theme: {
+          mood: "aqua", bgMode: "color", bgColor: "#071018", sidebarColor: "#0d1824", cardColor: "#132233",
+          scrambleColor: "#101e2e", textColor: "#ecfeff", mutedColor: "#7dd3fc", accentColor: "#06b6d4",
+          holdingColor: "#f43f5e", readyColor: "#22d3ee", sidebarAlpha: 88, sidebarBlur: 14,
+          timerBackdrop: false, scrambleBox: true, radius: 12,
+        },
+      },
+      {
+        id: "c-neon",
+        name: "Cyber Neon",
+        desc: "Obsidian & electric pink",
+        theme: {
+          mood: "neon", bgMode: "color", bgColor: "#09090e", sidebarColor: "#11101a", cardColor: "#191726",
+          scrambleColor: "#171424", textColor: "#faf5ff", mutedColor: "#a78bfa", accentColor: "#ec4899",
+          holdingColor: "#f43f5e", readyColor: "#22c55e", sidebarAlpha: 88, sidebarBlur: 14,
+          timerBackdrop: false, scrambleBox: true, radius: 12,
+        },
+      },
+      {
+        id: "c-amber",
+        name: "Warm Espresso",
+        desc: "Cozy dark amber tones",
+        theme: {
+          mood: "amber", bgMode: "color", bgColor: "#110d0a", sidebarColor: "#1a1410", cardColor: "#241b15",
+          scrambleColor: "#211913", textColor: "#fef3c7", mutedColor: "#d97706", accentColor: "#f59e0b",
+          holdingColor: "#ef4444", readyColor: "#84cc16", sidebarAlpha: 90, sidebarBlur: 12,
+          timerBackdrop: false, scrambleBox: true, radius: 10,
+        },
+      },
+      {
+        id: "c-light",
+        name: "Paper Daylight",
+        desc: "Warm off-white studio",
+        theme: {
+          mood: "light", bgMode: "color", bgColor: "#f4f3ef", sidebarColor: "#ffffff", cardColor: "#eae8e1",
+          scrambleColor: "#ffffff", textColor: "#111111", mutedColor: "#6b7280", accentColor: "#111111",
+          holdingColor: "#dc2626", readyColor: "#16a34a", sidebarAlpha: 92, sidebarBlur: 12,
+          timerBackdrop: false, scrambleBox: true, radius: 10,
+        },
+      },
+    ];
+
+    // Premade Scene + Matched Color Themes
+    const SCENE_PRESETS = [
+      {
+        id: "s-mountains",
+        name: "Midnight Peaks",
+        desc: "Frosted twilight + cyan",
+        theme: {
+          mood: "aqua", bgMode: "scene", sceneId: "mountains", bgBlur: 7, bgDim: 38, bgPosY: 50, bgScale: 106,
+          bgColor: "#0b132b", sidebarColor: "#0d1426", cardColor: "#151f38", scrambleColor: "#111a30",
+          textColor: "#f0f9ff", mutedColor: "#93c5fd", accentColor: "#38bdf8",
+          holdingColor: "#fb7185", readyColor: "#34d399", sidebarAlpha: 72, sidebarBlur: 18,
+          timerBackdrop: true, scrambleBox: true, radius: 14,
+        },
+      },
+      {
+        id: "s-tokyo",
+        name: "Tokyo Drizzle",
+        desc: "Rainy skyline + emerald",
+        theme: {
+          mood: "emerald", bgMode: "scene", sceneId: "tokyo-rain", bgBlur: 8, bgDim: 42, bgPosY: 50, bgScale: 106,
+          bgColor: "#0f172a", sidebarColor: "#0f141d", cardColor: "#18202c", scrambleColor: "#121a24",
+          textColor: "#f8fafc", mutedColor: "#94a3b8", accentColor: "#10b981",
+          holdingColor: "#ef4444", readyColor: "#10b981", sidebarAlpha: 76, sidebarBlur: 16,
+          timerBackdrop: false, scrambleBox: true, radius: 12,
+        },
+      },
+      {
+        id: "s-hearth",
+        name: "Hearth Ember",
+        desc: "Warm glow + gold accent",
+        theme: {
+          mood: "amber", bgMode: "scene", sceneId: "hearth", bgBlur: 10, bgDim: 35, bgPosY: 50, bgScale: 108,
+          bgColor: "#0c0908", sidebarColor: "#17110e", cardColor: "#241a14", scrambleColor: "#1f1611",
+          textColor: "#fffbeb", mutedColor: "#d6a87c", accentColor: "#f59e0b",
+          holdingColor: "#ef4444", readyColor: "#4ade80", sidebarAlpha: 74, sidebarBlur: 16,
+          timerBackdrop: true, scrambleBox: true, radius: 14,
+        },
+      },
+      {
+        id: "s-dusk",
+        name: "Solar Dusk",
+        desc: "Violet ridges + coral",
+        theme: {
+          mood: "neon", bgMode: "scene", sceneId: "solar-dusk", bgBlur: 8, bgDim: 36, bgPosY: 50, bgScale: 106,
+          bgColor: "#140d26", sidebarColor: "#150e26", cardColor: "#22163b", scrambleColor: "#1b1130",
+          textColor: "#fdf4ff", mutedColor: "#c4b5fd", accentColor: "#fb7185",
+          holdingColor: "#f43f5e", readyColor: "#34d399", sidebarAlpha: 74, sidebarBlur: 18,
+          timerBackdrop: true, scrambleBox: true, radius: 14,
+        },
+      },
+      {
+        id: "s-aurora",
+        name: "Aurora Night",
+        desc: "Northern lights + mint",
+        theme: {
+          mood: "aqua", bgMode: "scene", sceneId: "aurora", bgBlur: 9, bgDim: 34, bgPosY: 50, bgScale: 106,
+          bgColor: "#040814", sidebarColor: "#091121", cardColor: "#101d33", scrambleColor: "#0d1729",
+          textColor: "#ecfeff", mutedColor: "#7dd3fc", accentColor: "#2dd4bf",
+          holdingColor: "#fb7185", readyColor: "#2dd4bf", sidebarAlpha: 74, sidebarBlur: 18,
+          timerBackdrop: false, scrambleBox: true, radius: 12,
+        },
+      },
+    ];
+
+    const DEFAULT_THEME = {
+      presetId: "c-mono",
+      mood: "mono",
+      bgMode: "color", // "color" | "scene" | "upload"
+      sceneId: "mountains",
+      bgColor: "#0a0a0a",
+      sidebarColor: "#121212",
+      cardColor: "#1b1b1b",
+      scrambleColor: "#141414",
+      textColor: "#f5f5f5",
+      mutedColor: "#9a9a9a",
+      accentColor: "#f5f5f5",
+      holdingColor: "#ef4444",
+      readyColor: "#22c55e",
+      sidebarAlpha: 90,
+      sidebarBlur: 14,
+      radius: 10,
+      timerFont: '"JetBrains Mono", ui-monospace, Menlo, monospace',
+      uiFont: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
+      timerBackdrop: false,
+      scrambleBox: false,
+      bgBlur: 8,
+      bgDim: 45,
+      bgPosY: 50,
+      bgScale: 105,
     };
 
-    // Map csTimer scramble types to AlgTimer WCA events
+    const COLOR_SLOTS = [
+      { key: "bgColor", label: "Main Background" },
+      { key: "sidebarColor", label: "Sidebars & Topbar" },
+      { key: "scrambleColor", label: "Scramble Box" },
+      { key: "cardColor", label: "Cards & Panels" },
+      { key: "textColor", label: "Primary Font" },
+      { key: "mutedColor", label: "Muted Font" },
+      { key: "accentColor", label: "Accent Color" },
+      { key: "holdingColor", label: "Hold State" },
+      { key: "readyColor", label: "Ready State" },
+    ];
+
+    const DEFAULT_SETTINGS = {
+      event: "333",
+      holdDelayMs: 300,
+      decimals: 2,
+      focusMode: true,
+      focusBgBehavior: "blur", // "blur" | "same" | "dim"
+      timerSize: 9.5,
+      scrambleSize: 1.5,
+      sidebarWidth: 320,
+      goalMs: 15000,
+      previewDim: "3D",
+      profileName: "Cuber",
+      profileMethod: "CFOP",
+    };
+
+    const EVENT_TO_PUZZLE = {
+      "333": "3x3x3", "222": "2x2x2", "444": "4x4x4", "555": "5x5x5",
+      "666": "6x6x6", "777": "7x7x7", "333oh": "3x3x3", "333bf": "3x3x3",
+      "pyram": "pyraminx", "skewb": "skewb", "sq1": "square1", "clock": "clock", "minx": "megaminx",
+    };
+
     const CSTIMER_EVENT_MAP = {
-      "333": "333",
-      "333o": "333",
-      "333ni": "333bf",
-      "333oh": "333oh",
-      "222so": "222",
-      "222o": "222",
-      "222": "222",
-      "444wca": "444",
-      "444": "444",
-      "444m": "444",
-      "555wca": "555",
-      "555": "555",
-      "666wca": "666",
-      "666": "666",
-      "777wca": "777",
-      "777": "777",
-      "pyrso": "pyram",
-      "pyram": "pyram",
-      "pyr": "pyram",
-      "skbso": "skewb",
-      "skewb": "skewb",
-      "skb": "skewb",
-      "sqrs": "sq1",
-      "sq1": "sq1",
-      "clkwca": "clock",
-      "clock": "clock",
-      "clk": "clock",
-      "mgmp": "minx",
-      "minx": "minx",
+      "333": "333", "333o": "333", "333ni": "333bf", "333oh": "333oh",
+      "222so": "222", "222o": "222", "222": "222", "444wca": "444", "444": "444", "444m": "444",
+      "555wca": "555", "555": "555", "666wca": "666", "666": "666", "777wca": "777", "777": "777",
+      "pyrso": "pyram", "pyram": "pyram", "pyr": "pyram",
+      "skbso": "skewb", "skewb": "skewb", "skb": "skewb",
+      "sqrs": "sq1", "sq1": "sq1", "clkwca": "clock", "clock": "clock", "clk": "clock",
+      "mgmp": "minx", "minx": "minx",
     };
 
     const ALGS = [
@@ -1741,11 +2648,7 @@
 
     const CFOP_STAGES = [
       {
-        id: "cross",
-        title: "1. Cross",
-        split: "~12% of solve • <= 8 moves",
-        stickering: "Cross",
-        alg: "F R' D' R F2",
+        id: "cross", title: "1. Cross", split: "~12% of solve • <= 8 moves", stickering: "Cross", alg: "F R' D' R F2",
         points: [
           "<strong>Solve on the bottom (D):</strong> Never flip the cube over after finishing the cross—keep white/yellow on D.",
           "<strong>Plan all 4 edges in inspection:</strong> Know the relative color order (Blue-Orange-Green-Red) so you don't need centers aligned yet.",
@@ -1753,35 +2656,23 @@
         ],
       },
       {
-        id: "f2l",
-        title: "2. F2L (First Two Layers)",
-        split: "~50% of solve • Core speed gain",
-        stickering: "F2L",
-        alg: "U R U' R' U' F' U F",
+        id: "f2l", title: "2. F2L (First Two Layers)", split: "~50% of solve • Core speed gain", stickering: "F2L", alg: "U R U' R' U' F' U F",
         points: [
           "<strong>Back slots first:</strong> Fill BL and BR early so upcoming pairs stay visible in front.",
-          "<strong>Avoid unnecessary rotations:</strong> Learn basic wide/F-move inserts or sledgehammers (`R' F R F'`) instead of rotating twice.",
+          "<strong>Avoid unnecessary rotations:</strong> Learn basic wide/F-move inserts or sledgehammers (R' F R F') instead of rotating twice.",
           "<strong>Slow-turn lookahead drill:</strong> Turn at 60% speed with zero pauses between pairs—smoothness beats raw TPS.",
         ],
       },
       {
-        id: "oll",
-        title: "3. OLL (Orient Last Layer)",
-        split: "~18% of solve • 2-Look -> 57 algs",
-        stickering: "OLL",
-        alg: "F R U R' U' F' R U R' U R U2 R'",
+        id: "oll", title: "3. OLL (Orient Last Layer)", split: "~18% of solve • 2-Look -> 57 algs", stickering: "OLL", alg: "F R U R' U' F' R U R' U R U2 R'",
         points: [
           "<strong>Start with 2-Look OLL:</strong> Learn the 3 edge-orientation shapes (Dot, L, Line) + 7 corner cases (Sune, Anti-Sune, H, Pi, U, T, L).",
-          "<strong>Use triggers:</strong> Group moves into muscle-memory chunks like Sexy (`R U R' U'`) and Sledge (`R' F R F'`).",
+          "<strong>Use triggers:</strong> Group moves into muscle-memory chunks like Sexy (R U R' U') and Sledge (R' F R F').",
           "<strong>AUF awareness:</strong> Predict where the U-layer corners land to transition smoothly into PLL.",
         ],
       },
       {
-        id: "pll",
-        title: "4. PLL (Permute Last Layer)",
-        split: "~20% of solve • 21 algs",
-        stickering: "PLL",
-        alg: "R U R' U' R' F R2 U' R' U' R U R' F'",
+        id: "pll", title: "4. PLL (Permute Last Layer)", split: "~20% of solve • 21 algs", stickering: "PLL", alg: "R U R' U' R' F R2 U' R' U' R U R' F'",
         points: [
           "<strong>2-Look PLL first:</strong> Learn Aa/Y-Perm for corners and Ua/Ub/H/Z for edges—only 6 algs total.",
           "<strong>2-sided recognition:</strong> Look at just the Front and Right faces for blocks and headlights instead of spinning the cube.",
@@ -1790,37 +2681,29 @@
       },
     ];
 
-    const DEFAULT_SETTINGS = {
-      event: "333",
-      holdDelayMs: 300,
-      decimals: 2,
-      focusMode: true,
-      timerSize: 9.5,
-      scrambleSize: 1.55,
-      sidebarWidth: 320,
-      bgColor: "#0a0a0a",
-      surfaceColor: "#121212",
-      elevatedColor: "#1b1b1b",
-      borderColor: "#282828",
-      textColor: "#f5f5f5",
-      holdingColor: "#ef4444",
-      readyColor: "#22c55e",
-      goalMs: 15000,
-      previewDim: "3D",
-      profileName: "Cuber",
-      profileMethod: "CFOP",
-    };
-
+    // State
     let settings = loadSettings();
+    let activeTheme = loadTheme();
+    let draftTheme = null;
+    let savedPresets = loadCustomPresets();
+    let colorHistory = loadColorHistory();
+    let uploadedBgDataUrl = null;
+    let draftUploadedBgDataUrl = null;
+
     let solves = loadSolves();
     let learnedAlgs = loadLearned();
 
     let activeTab = "timer";
+    let activeStudioTab = "presets";
+    let activeColorSlot = "bgColor";
+    let wheelHSV = { h: 0, s: 0, v: 0.04 };
+    let isDraggingWheel = false;
+
     let activeAlgFilter = "ALL";
     let selectedAlgId = ALGS[0].id;
     let selectedStageId = CFOP_STAGES[0].id;
 
-    let timerState = "idle"; // "idle" | "holding" | "ready" | "running" | "stopping"
+    let timerState = "idle";
     let activeTrigger = null;
     let holdTimeoutId = null;
     let startTime = 0;
@@ -1833,14 +2716,19 @@
     let prefetchedEvent = null;
     let selectedSolveId = null;
 
-    // DOM Elements
+    // DOM
     const appEl = document.getElementById("app");
+    const bgMediaEl = document.getElementById("bg-media");
+    const bgDimEl = document.getElementById("bg-dim");
     const navTabs = document.querySelectorAll(".nav-tab");
     const viewTimer = document.getElementById("view-timer");
     const viewAlgs = document.getElementById("view-algs");
     const viewCfop = document.getElementById("view-cfop");
 
+    const topbarEventPill = document.getElementById("topbar-event-pill");
+    const topbarAo5Pill = document.getElementById("topbar-ao5-pill");
     const eventSelect = document.getElementById("event-select");
+
     const scramblePlayer = document.getElementById("scramble-player");
     const previewModeBadge = document.getElementById("preview-mode-badge");
     const toggleDimBtn = document.getElementById("toggle-dim-btn");
@@ -1851,12 +2739,14 @@
     const goalCurrentLabel = document.getElementById("goal-current-label");
     const goalFill = document.getElementById("goal-fill");
 
+    const scrambleArea = document.getElementById("scramble-area");
     const scrambleTextEl = document.getElementById("scramble-text");
     const scrambleStatusEl = document.getElementById("scramble-status");
     const newScrambleBtn = document.getElementById("new-scramble-btn");
     const copyScrambleBtn = document.getElementById("copy-scramble-btn");
 
     const timerZone = document.getElementById("timer-zone");
+    const timerCore = document.getElementById("timer-core");
     const timerDisplay = document.getElementById("timer-display");
     const timerHintText = document.getElementById("timer-hint-text");
 
@@ -1890,9 +2780,80 @@
     const stageSimTitle = document.getElementById("stage-sim-title");
     const stageSimBadge = document.getElementById("stage-sim-badge");
 
+    // Theme Studio DOM
+    const themeBtn = document.getElementById("theme-btn");
+    const themeModal = document.getElementById("theme-modal");
+    const closeThemeBtn = document.getElementById("close-theme-btn");
+    const cancelThemeBtn = document.getElementById("cancel-theme-btn");
+    const applyThemeBtn = document.getElementById("apply-theme-btn");
+    const saveCustomPresetBtn = document.getElementById("save-custom-preset-btn");
+
+    const accentPillsWrap = document.getElementById("accent-pills");
+    const activeMoodLabel = document.getElementById("active-mood-label");
+    const studioTabs = document.querySelectorAll(".studio-tab");
+    const studioPanePresets = document.getElementById("studio-pane-presets");
+    const studioPaneCustom = document.getElementById("studio-pane-custom");
+    const themeTimerBox = document.getElementById("theme-timer-box");
+    const themeScrambleBox = document.getElementById("theme-scramble-box");
+
+    const colorPresetsGrid = document.getElementById("color-presets-grid");
+    const scenePresetsGrid = document.getElementById("scene-presets-grid");
+    const savedPresetsSection = document.getElementById("saved-presets-section");
+    const savedPresetsGrid = document.getElementById("saved-presets-grid");
+
+    const sourceTabs = document.querySelectorAll(".source-tab");
+    const bgSourceScene = document.getElementById("bg-source-scene");
+    const bgSourceUpload = document.getElementById("bg-source-upload");
+    const bgSlidersPanel = document.getElementById("bg-sliders-panel");
+    const galleryGrid = document.getElementById("gallery-grid");
+    const uploadBgBtn = document.getElementById("upload-bg-btn");
+    const uploadStatusText = document.getElementById("upload-status-text");
+    const bgImageInput = document.getElementById("bg-image-input");
+
+    const themeBgBlur = document.getElementById("theme-bg-blur");
+    const bgBlurVal = document.getElementById("bg-blur-val");
+    const themeBgDim = document.getElementById("theme-bg-dim");
+    const bgDimVal = document.getElementById("bg-dim-val");
+    const themeBgPosY = document.getElementById("theme-bg-posy");
+    const bgPosYVal = document.getElementById("bg-posy-val");
+    const themeBgScale = document.getElementById("theme-bg-scale");
+    const bgScaleVal = document.getElementById("bg-scale-val");
+
+    const colorSlotsWrap = document.getElementById("color-slots");
+    const wheelSlotName = document.getElementById("wheel-slot-name");
+    const wheelHexBadge = document.getElementById("wheel-hex-badge");
+    const wheelWrap = document.getElementById("wheel-wrap");
+    const wheelCanvas = document.getElementById("color-wheel-canvas");
+    const wheelCursor = document.getElementById("wheel-cursor");
+    const wheelValSlider = document.getElementById("wheel-val-slider");
+    const wheelHexInput = document.getElementById("wheel-hex-input");
+    const colorHistorySwatches = document.getElementById("color-history-swatches");
+    const clearHistoryBtn = document.getElementById("clear-history-btn");
+
+    const themeSidebarAlpha = document.getElementById("theme-sidebar-alpha");
+    const sidebarAlphaVal = document.getElementById("sidebar-alpha-val");
+    const themeSidebarBlur = document.getElementById("theme-sidebar-blur");
+    const sidebarBlurVal = document.getElementById("sidebar-blur-val");
+    const themeRadius = document.getElementById("theme-radius");
+    const radiusVal = document.getElementById("radius-val");
+    const themeTimerFont = document.getElementById("theme-timer-font");
+    const themeUiFont = document.getElementById("theme-ui-font");
+
+    // Settings & Profile DOM
     const settingsModal = document.getElementById("settings-modal");
     const settingsBtn = document.getElementById("settings-btn");
     const closeSettingsBtn = document.getElementById("close-settings-btn");
+    const holdDelayInput = document.getElementById("setting-hold-delay");
+    const holdDelayValue = document.getElementById("hold-delay-value");
+    const decimalsSeg = document.getElementById("decimals-seg");
+    const focusModeInput = document.getElementById("setting-focus-mode");
+    const focusBgSelect = document.getElementById("setting-focus-bg");
+    const timerSizeInput = document.getElementById("setting-timer-size");
+    const timerSizeValue = document.getElementById("timer-size-value");
+    const scrambleSizeInput = document.getElementById("setting-scramble-size");
+    const scrambleSizeValue = document.getElementById("scramble-size-value");
+    const sidebarWidthInput = document.getElementById("setting-sidebar-width");
+    const sidebarWidthValue = document.getElementById("sidebar-width-value");
 
     const profileBtn = document.getElementById("profile-btn");
     const profileModal = document.getElementById("profile-modal");
@@ -1911,30 +2872,49 @@
     const modalPlus2Btn = document.getElementById("modal-plus2-btn");
     const modalDnfBtn = document.getElementById("modal-dnf-btn");
     const modalDelBtn = document.getElementById("modal-del-btn");
-
-    // Settings Controls
-    const holdDelayInput = document.getElementById("setting-hold-delay");
-    const holdDelayValue = document.getElementById("hold-delay-value");
-    const decimalsSeg = document.getElementById("decimals-seg");
-    const focusModeInput = document.getElementById("setting-focus-mode");
-    const timerSizeInput = document.getElementById("setting-timer-size");
-    const timerSizeValue = document.getElementById("timer-size-value");
-    const scrambleSizeInput = document.getElementById("setting-scramble-size");
-    const scrambleSizeValue = document.getElementById("scramble-size-value");
-    const sidebarWidthInput = document.getElementById("setting-sidebar-width");
-    const sidebarWidthValue = document.getElementById("sidebar-width-value");
-    const bgColorInput = document.getElementById("setting-bg-color");
-    const textColorInput = document.getElementById("setting-text-color");
-    const holdingColorInput = document.getElementById("setting-holding-color");
-    const readyColorInput = document.getElementById("setting-ready-color");
-    const presetButtons = document.querySelectorAll("[data-preset]");
-    const resetThemeBtn = document.getElementById("reset-theme-btn");
     const toastEl = document.getElementById("toast");
+
+    // ---------- IndexedDB Wallpaper Storage ----------
+    function openBgDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open("algtimer_assets", 1);
+        req.onupgradeneeded = () => req.result.createObjectStore("wallpapers");
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function saveUploadedBg(dataUrl) {
+      try {
+        const db = await openBgDB();
+        const tx = db.transaction("wallpapers", "readwrite");
+        tx.objectStore("wallpapers").put(dataUrl, "custom_bg");
+      } catch (e) {
+        console.warn("Could not save wallpaper to IndexedDB:", e);
+      }
+    }
+
+    async function loadUploadedBg() {
+      try {
+        const db = await openBgDB();
+        return await new Promise((resolve) => {
+          const tx = db.transaction("wallpapers", "readonly");
+          const req = tx.objectStore("wallpapers").get("custom_bg");
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => resolve(null);
+        });
+      } catch {
+        return null;
+      }
+    }
 
     // ---------- Init ----------
     async function init() {
+      uploadedBgDataUrl = await loadUploadedBg();
       eventSelect.value = settings.event;
       applySettingsToUI();
+      applyThemeToDOM(activeTheme, uploadedBgDataUrl);
+      drawColorWheel();
       renderAll();
       renderAlgs();
       renderCfop();
@@ -1962,6 +2942,521 @@
       clearTimeout(toastTimeoutId);
       toastTimeoutId = setTimeout(() => toastEl.classList.add("hidden"), 3200);
     }
+
+    // ---------- Color Utilities & Wheel ----------
+    function hexToRgb(hex) {
+      const clean = (hex || "#000000").replace("#", "");
+      const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
+      const num = parseInt(full, 16);
+      if (Number.isNaN(num)) return { r: 10, g: 10, b: 10 };
+      return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+    }
+
+    function hexToRgba(hex, alpha01) {
+      const { r, g, b } = hexToRgb(hex);
+      return `rgba(${r}, ${g}, ${b}, ${alpha01})`;
+    }
+
+    function isLightColor(hex) {
+      const { r, g, b } = hexToRgb(hex);
+      const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      return lum > 0.62;
+    }
+
+    function hsvToHex(h, s, v) {
+      const f = (n) => {
+        const k = (n + h / 60) % 6;
+        return v - v * s * Math.max(Math.min(k, 4 - k, 1), 0);
+      };
+      const toHex = (x) => Math.round(x * 255).toString(16).padStart(2, "0");
+      return `#${toHex(f(5))}${toHex(f(3))}${toHex(f(1))}`;
+    }
+
+    function hexToHsv(hex) {
+      const { r: r255, g: g255, b: b255 } = hexToRgb(hex);
+      const r = r255 / 255, g = g255 / 255, b = b255 / 255;
+      const max = Math.max(r, g, b), min = Math.min(r, g, b);
+      const d = max - min;
+      let h = 0;
+      if (d !== 0) {
+        if (max === r) h = ((g - b) / d) % 6;
+        else if (max === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        h = (h * 60 + 360) % 360;
+      }
+      const s = max === 0 ? 0 : d / max;
+      return { h, s, v: max };
+    }
+
+    function drawColorWheel() {
+      const ctx = wheelCanvas.getContext("2d");
+      const size = wheelCanvas.width;
+      const cx = size / 2;
+      const cy = size / 2;
+      const r = size / 2 - 2;
+      const img = ctx.createImageData(size, size);
+
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const dx = x - cx;
+          const dy = y - cy;
+          const dist = Math.hypot(dx, dy);
+          const idx = (y * size + x) * 4;
+          if (dist <= r) {
+            const hue = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+            const sat = dist / r;
+            const hex = hsvToHex(hue, sat, 1);
+            const { r: cr, g: cg, b: cb } = hexToRgb(hex);
+            img.data[idx] = cr;
+            img.data[idx + 1] = cg;
+            img.data[idx + 2] = cb;
+            img.data[idx + 3] = 255;
+          } else {
+            img.data[idx + 3] = 0;
+          }
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+    }
+
+    function syncWheelToHex(hex) {
+      wheelHSV = hexToHsv(hex);
+      const size = wheelCanvas.width;
+      const cx = size / 2;
+      const r = size / 2 - 2;
+      const rad = (wheelHSV.h * Math.PI) / 180;
+      const dist = wheelHSV.s * r;
+      wheelCursor.style.left = `${cx + Math.cos(rad) * dist}px`;
+      wheelCursor.style.top = `${cx + Math.sin(rad) * dist}px`;
+      wheelValSlider.value = Math.round(wheelHSV.v * 100);
+      wheelHexInput.value = hex.toUpperCase();
+      wheelHexBadge.textContent = hex.toUpperCase();
+    }
+
+    function pushColorHistory(hex) {
+      const upper = hex.toUpperCase();
+      if (!/^#[0-9A-F]{6}$/.test(upper)) return;
+      colorHistory = [upper, ...colorHistory.filter((c) => c !== upper)].slice(0, 14);
+      localStorage.setItem(STORAGE_COLOR_HISTORY_KEY, JSON.stringify(colorHistory));
+      renderColorHistory();
+    }
+
+    function handleWheelPointer(clientX, clientY) {
+      const rect = wheelCanvas.getBoundingClientRect();
+      const cx = rect.width / 2;
+      const cy = rect.height / 2;
+      const r = rect.width / 2 - 2;
+      let dx = clientX - rect.left - cx;
+      let dy = clientY - rect.top - cy;
+      let dist = Math.hypot(dx, dy);
+      if (dist > r) {
+        dx = (dx / dist) * r;
+        dy = (dy / dist) * r;
+        dist = r;
+      }
+      wheelHSV.h = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+      wheelHSV.s = dist / r;
+      const hex = hsvToHex(wheelHSV.h, wheelHSV.s, wheelHSV.v);
+      applyDraftSlotColor(hex);
+    }
+
+    function applyDraftSlotColor(hex) {
+      if (!draftTheme) return;
+      draftTheme[activeColorSlot] = hex;
+      syncWheelToHex(hex);
+      renderColorSlots();
+      applyThemeToDOM(draftTheme, draftUploadedBgDataUrl);
+    }
+
+    wheelWrap.addEventListener("pointerdown", (e) => {
+      isDraggingWheel = true;
+      wheelWrap.setPointerCapture(e.pointerId);
+      handleWheelPointer(e.clientX, e.clientY);
+    });
+    wheelWrap.addEventListener("pointermove", (e) => {
+      if (isDraggingWheel) handleWheelPointer(e.clientX, e.clientY);
+    });
+    wheelWrap.addEventListener("pointerup", () => {
+      if (isDraggingWheel && draftTheme) {
+        isDraggingWheel = false;
+        pushColorHistory(draftTheme[activeColorSlot]);
+      }
+    });
+
+    wheelValSlider.addEventListener("input", () => {
+      wheelHSV.v = Number(wheelValSlider.value) / 100;
+      applyDraftSlotColor(hsvToHex(wheelHSV.h, wheelHSV.s, wheelHSV.v));
+    });
+    wheelValSlider.addEventListener("change", () => {
+      if (draftTheme) pushColorHistory(draftTheme[activeColorSlot]);
+    });
+
+    wheelHexInput.addEventListener("input", () => {
+      const val = wheelHexInput.value.trim();
+      if (/^#[0-9A-Fa-f]{6}$/.test(val)) {
+        applyDraftSlotColor(val);
+      }
+    });
+    wheelHexInput.addEventListener("change", () => {
+      const val = wheelHexInput.value.trim();
+      if (/^#[0-9A-Fa-f]{6}$/.test(val)) pushColorHistory(val);
+    });
+
+    clearHistoryBtn.addEventListener("click", () => {
+      colorHistory = [];
+      localStorage.setItem(STORAGE_COLOR_HISTORY_KEY, JSON.stringify([]));
+      renderColorHistory();
+    });
+
+    // ---------- Theme Application ----------
+    function applyThemeToDOM(theme, uploadedImg) {
+      const root = document.documentElement.style;
+      const lightText = isLightColor(theme.sidebarColor);
+      const borderAlpha = lightText ? 0.14 : 0.1;
+      const borderStrongAlpha = lightText ? 0.28 : 0.22;
+      const borderBase = lightText ? "#000000" : "#ffffff";
+
+      root.setProperty("--bg-primary", theme.bgColor);
+      root.setProperty("--sidebar-bg-rgba", hexToRgba(theme.sidebarColor, theme.sidebarAlpha / 100));
+      root.setProperty("--sidebar-blur", `${theme.sidebarBlur}px`);
+      root.setProperty("--card-bg-rgba", hexToRgba(theme.cardColor, Math.min(0.95, (theme.sidebarAlpha + 4) / 100)));
+      root.setProperty("--scramble-bg-rgba", theme.scrambleBox ? hexToRgba(theme.scrambleColor, 0.72) : "rgba(0,0,0,0)");
+      root.setProperty("--border-color", hexToRgba(borderBase, borderAlpha));
+      root.setProperty("--border-strong", hexToRgba(borderBase, borderStrongAlpha));
+
+      root.setProperty("--text-primary", theme.textColor);
+      root.setProperty("--text-secondary", theme.mutedColor);
+      root.setProperty("--accent-color", theme.accentColor);
+      root.setProperty("--accent-contrast", isLightColor(theme.accentColor) ? "#0a0a0a" : "#ffffff");
+
+      root.setProperty("--state-idle", theme.textColor);
+      root.setProperty("--state-holding", theme.holdingColor);
+      root.setProperty("--state-ready", theme.readyColor);
+      root.setProperty("--state-running", theme.textColor);
+
+      root.setProperty("--font-timer", theme.timerFont);
+      root.setProperty("--font-ui", theme.uiFont);
+      root.setProperty("--radius", `${theme.radius}px`);
+
+      root.setProperty("--bg-blur", `${theme.bgBlur}px`);
+      root.setProperty("--bg-dim", String(theme.bgDim / 100));
+      root.setProperty("--bg-pos-y", `${theme.bgPosY}%`);
+      root.setProperty("--bg-scale", String(theme.bgScale / 100));
+
+      // Wallpaper Image / Scene vs Solid Color
+      if (theme.bgMode === "scene") {
+        const scene = PREMADE_SCENES.find((s) => s.id === theme.sceneId) || PREMADE_SCENES[0];
+        bgMediaEl.style.backgroundImage = scene.uri;
+        bgMediaEl.style.opacity = "1";
+        bgDimEl.style.display = "block";
+      } else if (theme.bgMode === "upload" && uploadedImg) {
+        bgMediaEl.style.backgroundImage = `url("${uploadedImg}")`;
+        bgMediaEl.style.opacity = "1";
+        bgDimEl.style.display = "block";
+      } else {
+        bgMediaEl.style.backgroundImage = "none";
+        bgMediaEl.style.opacity = "0";
+        bgDimEl.style.display = "none";
+      }
+
+      timerCore.classList.toggle("has-backdrop", Boolean(theme.timerBackdrop));
+      scrambleArea.classList.toggle("has-box", Boolean(theme.scrambleBox));
+    }
+
+    // ---------- Theme Studio UI ----------
+    function openThemeStudio() {
+      draftTheme = JSON.parse(JSON.stringify(activeTheme));
+      draftUploadedBgDataUrl = uploadedBgDataUrl;
+      syncStudioUI();
+      themeModal.classList.remove("hidden");
+    }
+
+    function cancelThemeStudio() {
+      draftTheme = null;
+      draftUploadedBgDataUrl = null;
+      applyThemeToDOM(activeTheme, uploadedBgDataUrl);
+      themeModal.classList.add("hidden");
+    }
+
+    async function applyThemeStudio() {
+      if (!draftTheme) return;
+      activeTheme = JSON.parse(JSON.stringify(draftTheme));
+      if (draftUploadedBgDataUrl && draftUploadedBgDataUrl !== uploadedBgDataUrl) {
+        uploadedBgDataUrl = draftUploadedBgDataUrl;
+        await saveUploadedBg(uploadedBgDataUrl);
+      }
+      localStorage.setItem(STORAGE_THEME_KEY, JSON.stringify(activeTheme));
+      applyThemeToDOM(activeTheme, uploadedBgDataUrl);
+      draftTheme = null;
+      themeModal.classList.add("hidden");
+      showToast("Theme applied!");
+    }
+
+    function syncStudioUI() {
+      if (!draftTheme) return;
+      renderQuickMoods();
+      renderPresets();
+      renderGallery();
+      renderColorSlots();
+      renderColorHistory();
+
+      themeTimerBox.checked = Boolean(draftTheme.timerBackdrop);
+      themeScrambleBox.checked = Boolean(draftTheme.scrambleBox);
+
+      // Background Source Tabs
+      sourceTabs.forEach((b) => b.classList.toggle("active", b.dataset.bgMode === draftTheme.bgMode));
+      bgSourceScene.classList.toggle("hidden", draftTheme.bgMode !== "scene");
+      bgSourceUpload.classList.toggle("hidden", draftTheme.bgMode !== "upload");
+      bgSlidersPanel.classList.toggle("hidden", draftTheme.bgMode === "color");
+      uploadStatusText.textContent = draftUploadedBgDataUrl ? "Custom photo loaded" : "Upload your own wallpaper";
+
+      themeBgBlur.value = draftTheme.bgBlur;
+      bgBlurVal.textContent = `${draftTheme.bgBlur}px`;
+      themeBgDim.value = draftTheme.bgDim;
+      bgDimVal.textContent = `${draftTheme.bgDim}%`;
+      themeBgPosY.value = draftTheme.bgPosY;
+      bgPosYVal.textContent = `${draftTheme.bgPosY}%`;
+      themeBgScale.value = draftTheme.bgScale;
+      bgScaleVal.textContent = `${draftTheme.bgScale}%`;
+
+      themeSidebarAlpha.value = draftTheme.sidebarAlpha;
+      sidebarAlphaVal.textContent = `${draftTheme.sidebarAlpha}%`;
+      themeSidebarBlur.value = draftTheme.sidebarBlur;
+      sidebarBlurVal.textContent = `${draftTheme.sidebarBlur}px`;
+      themeRadius.value = draftTheme.radius;
+      radiusVal.textContent = `${draftTheme.radius}px`;
+      themeTimerFont.value = draftTheme.timerFont;
+      themeUiFont.value = draftTheme.uiFont;
+
+      const slotMeta = COLOR_SLOTS.find((s) => s.key === activeColorSlot) || COLOR_SLOTS[0];
+      wheelSlotName.textContent = slotMeta.label;
+      syncWheelToHex(draftTheme[activeColorSlot]);
+    }
+
+    function renderQuickMoods() {
+      accentPillsWrap.innerHTML = "";
+      const currentMood = QUICK_MOODS.find((m) => m.id === draftTheme.mood);
+      activeMoodLabel.textContent = currentMood ? currentMood.name.toUpperCase() : "CUSTOM";
+
+      QUICK_MOODS.forEach((m) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `accent-pill ${draftTheme.mood === m.id ? "active" : ""}`;
+        btn.innerHTML = `<span class="accent-dot" style="background:${m.dot}"></span><span>${m.name}</span>`;
+        btn.addEventListener("click", () => {
+          Object.assign(draftTheme, {
+            mood: m.id,
+            bgColor: m.bg,
+            sidebarColor: m.sidebar,
+            cardColor: m.card,
+            textColor: m.text,
+            mutedColor: m.muted,
+            accentColor: m.accent,
+            presetId: null,
+          });
+          applyThemeToDOM(draftTheme, draftUploadedBgDataUrl);
+          syncStudioUI();
+        });
+        accentPillsWrap.appendChild(btn);
+      });
+    }
+
+    function renderPresets() {
+      const renderCard = (p, isCustom = false) => {
+        const card = document.createElement("div");
+        card.className = `preset-card ${draftTheme.presetId === p.id ? "active" : ""}`;
+        let thumbStyle = `background: linear-gradient(135deg, ${p.theme.bgColor} 55%, ${p.theme.accentColor} 100%)`;
+        if (p.theme.bgMode === "scene") {
+          const sc = PREMADE_SCENES.find((s) => s.id === p.theme.sceneId);
+          if (sc) thumbStyle = `background-image: ${sc.uri}`;
+        }
+        card.innerHTML = `
+          <div class="preset-thumb" style="${thumbStyle}"></div>
+          <div class="preset-meta">
+            <strong>${p.name}</strong>
+            <small>${p.desc || "Custom saved vibe"}</small>
+          </div>
+          ${isCustom ? `<button class="preset-del" data-del="${p.id}" type="button" title="Delete preset">✕</button>` : ""}
+        `;
+        card.addEventListener("click", (e) => {
+          const delBtn = e.target.closest("[data-del]");
+          if (delBtn) {
+            e.stopPropagation();
+            savedPresets = savedPresets.filter((x) => x.id !== p.id);
+            localStorage.setItem(STORAGE_CUSTOM_PRESETS_KEY, JSON.stringify(savedPresets));
+            renderPresets();
+            return;
+          }
+          draftTheme = { ...DEFAULT_THEME, ...p.theme, presetId: p.id };
+          applyThemeToDOM(draftTheme, draftUploadedBgDataUrl);
+          syncStudioUI();
+        });
+        return card;
+      };
+
+      colorPresetsGrid.innerHTML = "";
+      COLOR_PRESETS.forEach((p) => colorPresetsGrid.appendChild(renderCard(p)));
+
+      scenePresetsGrid.innerHTML = "";
+      SCENE_PRESETS.forEach((p) => scenePresetsGrid.appendChild(renderCard(p)));
+
+      savedPresetsGrid.innerHTML = "";
+      savedPresetsSection.classList.toggle("hidden", savedPresets.length === 0);
+      savedPresets.forEach((p) => savedPresetsGrid.appendChild(renderCard(p, true)));
+    }
+
+    function renderGallery() {
+      galleryGrid.innerHTML = "";
+      PREMADE_SCENES.forEach((sc) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = `gallery-item ${draftTheme.sceneId === sc.id ? "active" : ""}`;
+        item.style.backgroundImage = sc.uri;
+        item.textContent = sc.name;
+        item.addEventListener("click", () => {
+          draftTheme.bgMode = "scene";
+          draftTheme.sceneId = sc.id;
+          draftTheme.presetId = null;
+          applyThemeToDOM(draftTheme, draftUploadedBgDataUrl);
+          syncStudioUI();
+        });
+        galleryGrid.appendChild(item);
+      });
+    }
+
+    function renderColorSlots() {
+      colorSlotsWrap.innerHTML = "";
+      COLOR_SLOTS.forEach((slot) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `color-slot-btn ${activeColorSlot === slot.key ? "active" : ""}`;
+        btn.innerHTML = `
+          <span>${slot.label}</span>
+          <span class="slot-swatch" style="background:${draftTheme[slot.key]}"></span>
+        `;
+        btn.addEventListener("click", () => {
+          activeColorSlot = slot.key;
+          syncStudioUI();
+        });
+        colorSlotsWrap.appendChild(btn);
+      });
+    }
+
+    function renderColorHistory() {
+      colorHistorySwatches.innerHTML = "";
+      // Show recent picked colors + current theme unique colors if history is empty
+      const list = colorHistory.length > 0
+        ? colorHistory
+        : [...new Set(COLOR_SLOTS.map((s) => draftTheme ? draftTheme[s.key].toUpperCase() : activeTheme[s.key].toUpperCase()))];
+
+      list.forEach((hex) => {
+        const sw = document.createElement("button");
+        sw.type = "button";
+        sw.className = "hist-swatch";
+        sw.style.background = hex;
+        sw.title = hex;
+        sw.addEventListener("click", () => {
+          applyDraftSlotColor(hex);
+          pushColorHistory(hex);
+        });
+        colorHistorySwatches.appendChild(sw);
+      });
+    }
+
+    // Studio Events
+    themeBtn.addEventListener("click", openThemeStudio);
+    closeThemeBtn.addEventListener("click", cancelThemeStudio);
+    cancelThemeBtn.addEventListener("click", cancelThemeStudio);
+    applyThemeBtn.addEventListener("click", applyThemeStudio);
+
+    studioTabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        activeStudioTab = tab.dataset.studioTab;
+        studioTabs.forEach((t) => t.classList.toggle("active", t === tab));
+        studioPanePresets.classList.toggle("hidden", activeStudioTab !== "presets");
+        studioPaneCustom.classList.toggle("hidden", activeStudioTab !== "custom");
+      });
+    });
+
+    sourceTabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        draftTheme.bgMode = tab.dataset.bgMode;
+        draftTheme.presetId = null;
+        applyThemeToDOM(draftTheme, draftUploadedBgDataUrl);
+        syncStudioUI();
+      });
+    });
+
+    uploadBgBtn.addEventListener("click", () => {
+      bgImageInput.value = "";
+      bgImageInput.click();
+    });
+
+    bgImageInput.addEventListener("change", () => {
+      const file = bgImageInput.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        draftUploadedBgDataUrl = reader.result;
+        draftTheme.bgMode = "upload";
+        draftTheme.presetId = null;
+        applyThemeToDOM(draftTheme, draftUploadedBgDataUrl);
+        syncStudioUI();
+      };
+      reader.readAsDataURL(file);
+    });
+
+    themeTimerBox.addEventListener("change", () => {
+      draftTheme.timerBackdrop = themeTimerBox.checked;
+      applyThemeToDOM(draftTheme, draftUploadedBgDataUrl);
+    });
+    themeScrambleBox.addEventListener("change", () => {
+      draftTheme.scrambleBox = themeScrambleBox.checked;
+      applyThemeToDOM(draftTheme, draftUploadedBgDataUrl);
+    });
+
+    const bindDraftSlider = (el, key, labelEl, suffix) => {
+      el.addEventListener("input", () => {
+        draftTheme[key] = Number(el.value);
+        draftTheme.presetId = null;
+        labelEl.textContent = `${el.value}${suffix}`;
+        applyThemeToDOM(draftTheme, draftUploadedBgDataUrl);
+      });
+    };
+    bindDraftSlider(themeBgBlur, "bgBlur", bgBlurVal, "px");
+    bindDraftSlider(themeBgDim, "bgDim", bgDimVal, "%");
+    bindDraftSlider(themeBgPosY, "bgPosY", bgPosYVal, "%");
+    bindDraftSlider(themeBgScale, "bgScale", bgScaleVal, "%");
+    bindDraftSlider(themeSidebarAlpha, "sidebarAlpha", sidebarAlphaVal, "%");
+    bindDraftSlider(themeSidebarBlur, "sidebarBlur", sidebarBlurVal, "px");
+    bindDraftSlider(themeRadius, "radius", radiusVal, "px");
+
+    themeTimerFont.addEventListener("change", () => {
+      draftTheme.timerFont = themeTimerFont.value;
+      applyThemeToDOM(draftTheme, draftUploadedBgDataUrl);
+    });
+    themeUiFont.addEventListener("change", () => {
+      draftTheme.uiFont = themeUiFont.value;
+      applyThemeToDOM(draftTheme, draftUploadedBgDataUrl);
+    });
+
+    saveCustomPresetBtn.addEventListener("click", () => {
+      if (!draftTheme) return;
+      const name = prompt("Name your custom theme preset:", "My Custom Vibe");
+      if (!name || !name.trim()) return;
+      const id = `custom-${Date.now()}`;
+      const preset = {
+        id,
+        name: name.trim(),
+        desc: draftTheme.bgMode === "scene" ? "Scene + Custom" : "Custom Colors",
+        theme: { ...draftTheme, presetId: id },
+      };
+      savedPresets.push(preset);
+      localStorage.setItem(STORAGE_CUSTOM_PRESETS_KEY, JSON.stringify(savedPresets));
+      draftTheme.presetId = id;
+      renderPresets();
+      showToast(`Saved preset "${preset.name}"`);
+    });
 
     // ---------- Tabs ----------
     navTabs.forEach((btn) => {
@@ -2051,7 +3546,7 @@
         scramblePlayer.cameraLatitude = 30;
         scramblePlayer.cameraLongitude = 35;
       } catch {
-        // Ignore if not upgraded
+        // Ignore
       }
     });
 
@@ -2062,8 +3557,10 @@
 
       if (nextState === "running" && settings.focusMode) {
         appEl.classList.add("is-running");
+        document.body.classList.add("is-solving");
       } else {
         appEl.classList.remove("is-running");
+        document.body.classList.remove("is-solving");
       }
 
       if (nextState === "idle") {
@@ -2155,6 +3652,7 @@
 
     function isModalOpen() {
       return (
+        !themeModal.classList.contains("hidden") ||
         !settingsModal.classList.contains("hidden") ||
         !solveModal.classList.contains("hidden") ||
         !profileModal.classList.contains("hidden")
@@ -2163,7 +3661,10 @@
 
     window.addEventListener("keydown", (e) => {
       if (isModalOpen()) {
-        if (e.key === "Escape") closeModals();
+        if (e.key === "Escape") {
+          if (!themeModal.classList.contains("hidden")) cancelThemeStudio();
+          else closeModals();
+        }
         return;
       }
       if (activeTab !== "timer") return;
@@ -2175,11 +3676,8 @@
         }
         if (e.repeat) return;
 
-        if (timerState === "idle") {
-          beginHold("space");
-        } else if (timerState === "running") {
-          stopTimer("space");
-        }
+        if (timerState === "idle") beginHold("space");
+        else if (timerState === "running") stopTimer("space");
       }
     });
 
@@ -2187,13 +3685,9 @@
       if (e.code !== "Space" || activeTab !== "timer") return;
       e.preventDefault();
 
-      if (timerState === "holding" && activeTrigger === "space") {
-        cancelHold();
-      } else if (timerState === "ready" && activeTrigger === "space") {
-        startTimer();
-      } else if (timerState === "stopping" && activeTrigger === "space") {
-        finishStopCycle();
-      }
+      if (timerState === "holding" && activeTrigger === "space") cancelHold();
+      else if (timerState === "ready" && activeTrigger === "space") startTimer();
+      else if (timerState === "stopping" && activeTrigger === "space") finishStopCycle();
     });
 
     window.addEventListener(
@@ -2205,9 +3699,7 @@
         e.preventDefault();
         e.stopPropagation();
         suppressNextClick = true;
-        setTimeout(() => {
-          suppressNextClick = false;
-        }, 100);
+        setTimeout(() => (suppressNextClick = false), 100);
         stopTimer("pointer");
       },
       { capture: true }
@@ -2237,29 +3729,19 @@
     });
 
     window.addEventListener("pointerup", () => {
-      if (timerState === "holding" && activeTrigger === "pointer") {
-        cancelHold();
-      } else if (timerState === "ready" && activeTrigger === "pointer") {
-        startTimer();
-      } else if (timerState === "stopping" && activeTrigger === "pointer") {
-        finishStopCycle();
-      }
+      if (timerState === "holding" && activeTrigger === "pointer") cancelHold();
+      else if (timerState === "ready" && activeTrigger === "pointer") startTimer();
+      else if (timerState === "stopping" && activeTrigger === "pointer") finishStopCycle();
     });
 
     window.addEventListener("pointercancel", () => {
-      if (timerState === "holding" || timerState === "ready") {
-        cancelHold();
-      } else if (timerState === "stopping") {
-        finishStopCycle();
-      }
+      if (timerState === "holding" || timerState === "ready") cancelHold();
+      else if (timerState === "stopping") finishStopCycle();
     });
 
     window.addEventListener("blur", () => {
-      if (timerState === "holding" || timerState === "ready") {
-        cancelHold();
-      } else if (timerState === "stopping") {
-        finishStopCycle();
-      }
+      if (timerState === "holding" || timerState === "ready") cancelHold();
+      else if (timerState === "stopping") finishStopCycle();
     });
 
     // ---------- csTimer & AlgTimer Import ----------
@@ -2293,7 +3775,6 @@
         const existingKeys = new Set(solves.map(makeKey));
 
         if (Array.isArray(data)) {
-          // Native AlgTimer JSON backup
           for (const item of data) {
             if (!item || typeof item.rawMs !== "number") continue;
             const solve = {
@@ -2315,15 +3796,10 @@
             eventCounts[solve.event] = (eventCounts[solve.event] || 0) + 1;
           }
         } else if (data && typeof data === "object") {
-          // csTimer export format
           let sessionData = {};
           const rawSessionData = data.properties?.sessionData;
           if (typeof rawSessionData === "string") {
-            try {
-              sessionData = JSON.parse(rawSessionData);
-            } catch {
-              sessionData = {};
-            }
+            try { sessionData = JSON.parse(rawSessionData); } catch { sessionData = {}; }
           } else if (rawSessionData && typeof rawSessionData === "object") {
             sessionData = rawSessionData;
           }
@@ -2367,7 +3843,7 @@
             }
           }
         } else {
-          throw new Error("Unrecognized file format");
+          throw new Error("Unrecognized format");
         }
 
         if (importedCount === 0 && skippedDupes === 0) {
@@ -2378,7 +3854,6 @@
         solves.sort((a, b) => a.createdAt - b.createdAt);
         saveSolves();
 
-        // Switch to the top imported event if current event has none imported
         const topImportedEvent = Object.entries(eventCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
         if (topImportedEvent && !eventCounts[settings.event]) {
           settings.event = topImportedEvent;
@@ -2480,7 +3955,7 @@
         .join("");
 
       sparklineWrap.innerHTML = `
-        <svg viewBox="0 0 ${w} ${h}" width="100%" height="100%" style="color: var(--text-primary)">
+        <svg viewBox="0 0 ${w} ${h}" width="100%" height="100%" style="color: var(--accent-color)">
           <polyline fill="none" stroke="currentColor" stroke-width="1.8" stroke-opacity="0.85" points="${points}" />
           ${dots}
         </svg>
@@ -2519,6 +3994,9 @@
       statMeanEl.textContent = mean === null ? "-" : formatTime(mean, dec);
       statCountEl.textContent = String(eventSolves.length);
 
+      topbarEventPill.textContent = EVENT_TO_PUZZLE[settings.event] || settings.event.toUpperCase();
+      topbarAo5Pill.textContent = ao5 === null ? "Ao5: -" : `Ao5: ${formatTime(ao5, dec)}`;
+
       renderSparkline(eventSolves);
       renderGoal(ao5);
 
@@ -2527,14 +4005,10 @@
         lastSolveActions.classList.remove("hidden");
         lastPlus2Btn.classList.toggle("active", latest.penalty === "+2");
         lastDnfBtn.classList.toggle("active", latest.penalty === "DNF");
-        if (timerState === "idle") {
-          timerDisplay.textContent = formatSolve(latest, dec);
-        }
+        if (timerState === "idle") timerDisplay.textContent = formatSolve(latest, dec);
       } else {
         lastSolveActions.classList.add("hidden");
-        if (timerState === "idle") {
-          timerDisplay.textContent = formatTime(0, dec);
-        }
+        if (timerState === "idle") timerDisplay.textContent = formatTime(0, dec);
       }
 
       solveListEl.innerHTML = "";
@@ -2597,16 +4071,12 @@
           const learnBtn = e.target.closest('button[data-act="learn"]');
           if (learnBtn) {
             e.stopPropagation();
-            if (learnedAlgs.includes(item.id)) {
-              learnedAlgs = learnedAlgs.filter((id) => id !== item.id);
-            } else {
-              learnedAlgs.push(item.id);
-            }
+            if (learnedAlgs.includes(item.id)) learnedAlgs = learnedAlgs.filter((id) => id !== item.id);
+            else learnedAlgs.push(item.id);
             localStorage.setItem(STORAGE_LEARNED_KEY, JSON.stringify(learnedAlgs));
             renderAlgs();
             return;
           }
-
           selectedAlgId = item.id;
           loadAlgSimulator(item);
           renderAlgs();
@@ -2631,7 +4101,7 @@
         algPlayer.alg = item.alg;
         algPlayer.timestamp = 0;
       } catch {
-        // Ignore if not upgraded yet
+        // Ignore
       }
     }
 
@@ -2653,9 +4123,7 @@
             <span class="stage-title">${stage.title}</span>
             <span class="stage-split">${stage.split}</span>
           </div>
-          <ul class="stage-points">
-            ${stage.points.map((p) => `<li>${p}</li>`).join("")}
-          </ul>
+          <ul class="stage-points">${stage.points.map((p) => `<li>${p}</li>`).join("")}</ul>
         `;
         card.addEventListener("click", () => {
           selectedStageId = stage.id;
@@ -2679,7 +4147,7 @@
         stagePlayer.alg = stage.alg;
         stagePlayer.timestamp = 0;
       } catch {
-        // Ignore if not upgraded yet
+        // Ignore
       }
     }
 
@@ -2724,7 +4192,7 @@
         copyScrambleBtn.textContent = "Copied";
         setTimeout(() => (copyScrambleBtn.textContent = prev), 900);
       } catch {
-        // Ignore clipboard errors
+        // Ignore
       }
     });
 
@@ -2734,9 +4202,7 @@
       const val = prompt("Enter target Ao5 in seconds (e.g. 12.5):", currentSec);
       if (val === null) return;
       const num = parseFloat(val);
-      if (!Number.isNaN(num) && num > 0) {
-        updateSetting("goalMs", Math.round(num * 1000));
-      }
+      if (!Number.isNaN(num) && num > 0) updateSetting("goalMs", Math.round(num * 1000));
     });
 
     lastPlus2Btn.addEventListener("click", () => {
@@ -2788,15 +4254,9 @@
       solveModal.classList.remove("hidden");
     }
 
-    modalPlus2Btn.addEventListener("click", () => {
-      if (selectedSolveId) togglePenalty(selectedSolveId, "+2");
-    });
-    modalDnfBtn.addEventListener("click", () => {
-      if (selectedSolveId) togglePenalty(selectedSolveId, "DNF");
-    });
-    modalDelBtn.addEventListener("click", () => {
-      if (selectedSolveId) deleteSolve(selectedSolveId);
-    });
+    modalPlus2Btn.addEventListener("click", () => selectedSolveId && togglePenalty(selectedSolveId, "+2"));
+    modalDnfBtn.addEventListener("click", () => selectedSolveId && togglePenalty(selectedSolveId, "DNF"));
+    modalDelBtn.addEventListener("click", () => selectedSolveId && deleteSolve(selectedSolveId));
     closeSolveModalBtn.addEventListener("click", closeModals);
 
     settingsBtn.addEventListener("click", () => settingsModal.classList.remove("hidden"));
@@ -2822,6 +4282,10 @@
       });
     });
 
+    themeModal.addEventListener("click", (e) => {
+      if (e.target === themeModal) cancelThemeStudio();
+    });
+
     function closeModals() {
       settingsModal.classList.add("hidden");
       solveModal.classList.add("hidden");
@@ -2829,40 +4293,30 @@
       selectedSolveId = null;
     }
 
-    // ---------- Settings Sync & Presets ----------
+    // ---------- Settings Sync ----------
     function applySettingsToUI() {
       const root = document.documentElement.style;
-      root.setProperty("--bg-primary", settings.bgColor);
-      root.setProperty("--bg-surface", settings.surfaceColor);
-      root.setProperty("--bg-elevated", settings.elevatedColor);
-      root.setProperty("--border-color", settings.borderColor);
-      root.setProperty("--text-primary", settings.textColor);
-      root.setProperty("--state-holding", settings.holdingColor);
-      root.setProperty("--state-ready", settings.readyColor);
-      root.setProperty("--state-running", settings.textColor);
       root.setProperty("--timer-size", `${settings.timerSize}rem`);
       root.setProperty("--scramble-size", `${settings.scrambleSize}rem`);
       root.setProperty("--sidebar-width", `${settings.sidebarWidth}px`);
 
+      document.body.classList.toggle("focus-extra-blur", settings.focusBgBehavior === "blur");
+      document.body.classList.toggle("focus-dim", settings.focusBgBehavior === "dim");
+
       holdDelayInput.value = settings.holdDelayMs;
       holdDelayValue.textContent = `${settings.holdDelayMs}ms`;
-
       decimalsSeg.querySelectorAll(".seg-btn").forEach((b) => {
         b.classList.toggle("active", Number(b.dataset.dec) === settings.decimals);
       });
-
       focusModeInput.checked = settings.focusMode;
+      focusBgSelect.value = settings.focusBgBehavior;
+
       timerSizeInput.value = settings.timerSize;
       timerSizeValue.textContent = `${settings.timerSize}rem`;
       scrambleSizeInput.value = settings.scrambleSize;
       scrambleSizeValue.textContent = `${settings.scrambleSize}rem`;
       sidebarWidthInput.value = settings.sidebarWidth;
       sidebarWidthValue.textContent = `${settings.sidebarWidth}px`;
-
-      bgColorInput.value = settings.bgColor;
-      textColorInput.value = settings.textColor;
-      holdingColorInput.value = settings.holdingColor;
-      readyColorInput.value = settings.readyColor;
 
       profileNameLabel.textContent = settings.profileName;
       profileAvatar.textContent = (settings.profileName[0] || "C").toUpperCase();
@@ -2881,92 +4335,35 @@
       if (btn) updateSetting("decimals", Number(btn.dataset.dec));
     });
     focusModeInput.addEventListener("change", () => updateSetting("focusMode", focusModeInput.checked));
+    focusBgSelect.addEventListener("change", () => updateSetting("focusBgBehavior", focusBgSelect.value));
     timerSizeInput.addEventListener("input", () => updateSetting("timerSize", Number(timerSizeInput.value)));
     scrambleSizeInput.addEventListener("input", () => updateSetting("scrambleSize", Number(scrambleSizeInput.value)));
     sidebarWidthInput.addEventListener("input", () => updateSetting("sidebarWidth", Number(sidebarWidthInput.value)));
 
-    bgColorInput.addEventListener("input", () => updateSetting("bgColor", bgColorInput.value));
-    textColorInput.addEventListener("input", () => updateSetting("textColor", textColorInput.value));
-    holdingColorInput.addEventListener("input", () => updateSetting("holdingColor", holdingColorInput.value));
-    readyColorInput.addEventListener("input", () => updateSetting("readyColor", readyColorInput.value));
-
-    presetButtons.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const p = btn.dataset.preset;
-        if (p === "classic") {
-          Object.assign(settings, {
-            bgColor: "#0a0a0a",
-            surfaceColor: "#121212",
-            elevatedColor: "#1b1b1b",
-            borderColor: "#282828",
-            textColor: "#f5f5f5",
-            holdingColor: "#ef4444",
-            readyColor: "#22c55e",
-          });
-        } else if (p === "pure-mono") {
-          Object.assign(settings, {
-            bgColor: "#0a0a0a",
-            surfaceColor: "#121212",
-            elevatedColor: "#1b1b1b",
-            borderColor: "#282828",
-            textColor: "#f5f5f5",
-            holdingColor: "#666666",
-            readyColor: "#ffffff",
-          });
-        } else if (p === "light") {
-          Object.assign(settings, {
-            bgColor: "#f5f5f5",
-            surfaceColor: "#ffffff",
-            elevatedColor: "#ebebeb",
-            borderColor: "#d4d4d4",
-            textColor: "#111111",
-            holdingColor: "#dc2626",
-            readyColor: "#16a34a",
-          });
-        }
-        saveSettings();
-        applySettingsToUI();
-        renderAll();
-      });
-    });
-
-    resetThemeBtn.addEventListener("click", () => {
-      const keepEvent = settings.event;
-      const keepName = settings.profileName;
-      const keepMethod = settings.profileMethod;
-      settings = { ...DEFAULT_SETTINGS, event: keepEvent, profileName: keepName, profileMethod: keepMethod };
-      saveSettings();
-      applySettingsToUI();
-      updateScramblePreview();
-      renderAll();
-    });
-
+    // ---------- Persistence ----------
     function loadSolves() {
-      try {
-        return JSON.parse(localStorage.getItem(STORAGE_SOLVES_KEY)) || [];
-      } catch {
-        return [];
-      }
+      try { return JSON.parse(localStorage.getItem(STORAGE_SOLVES_KEY)) || []; } catch { return []; }
     }
     function saveSolves() {
       localStorage.setItem(STORAGE_SOLVES_KEY, JSON.stringify(solves));
     }
     function loadSettings() {
-      try {
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(STORAGE_SETTINGS_KEY)) };
-      } catch {
-        return { ...DEFAULT_SETTINGS };
-      }
+      try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(STORAGE_SETTINGS_KEY)) }; } catch { return { ...DEFAULT_SETTINGS }; }
     }
     function saveSettings() {
       localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(settings));
     }
+    function loadTheme() {
+      try { return { ...DEFAULT_THEME, ...JSON.parse(localStorage.getItem(STORAGE_THEME_KEY)) }; } catch { return { ...DEFAULT_THEME }; }
+    }
+    function loadCustomPresets() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_CUSTOM_PRESETS_KEY)) || []; } catch { return []; }
+    }
+    function loadColorHistory() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_COLOR_HISTORY_KEY)) || []; } catch { return []; }
+    }
     function loadLearned() {
-      try {
-        return JSON.parse(localStorage.getItem(STORAGE_LEARNED_KEY)) || [];
-      } catch {
-        return [];
-      }
+      try { return JSON.parse(localStorage.getItem(STORAGE_LEARNED_KEY)) || []; } catch { return []; }
     }
 
     init();
