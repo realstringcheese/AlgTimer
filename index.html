@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MONO // Cubing Timer</title>
+  <title>AlgTimer // WCA Cubing Timer & Trainer</title>
   <style>
     /* =========================================================
        THEME & CUSTOMIZATION VARIABLES (Edit anything here!)
@@ -11,13 +11,13 @@
     :root {
       --bg-primary: #0a0a0a;
       --bg-surface: #121212;
-      --bg-elevated: #1c1c1c;
-      --border-color: #2a2a2a;
-      --border-strong: #404040;
+      --bg-elevated: #1b1b1b;
+      --border-color: #282828;
+      --border-strong: #424242;
 
       --text-primary: #f5f5f5;
-      --text-secondary: #999999;
-      --text-muted: #5c5c5c;
+      --text-secondary: #9a9a9a;
+      --text-muted: #5a5a5a;
 
       --state-idle: var(--text-primary);
       --state-holding: #666666;
@@ -27,7 +27,8 @@
       --font-sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
       --font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
       --timer-size: 7.5rem;
-      --scramble-size: 1.35rem;
+      --scramble-size: 1.3rem;
+      --sidebar-width: clamp(240px, 21vw, 285px);
       --radius: 8px;
     }
 
@@ -50,56 +51,125 @@
       display: none !important;
     }
 
+    /* App Shell */
     .app {
-      display: grid;
-      grid-template-columns: 300px 1fr;
+      display: flex;
+      flex-direction: column;
       height: 100vh;
       overflow: hidden;
     }
 
-    /* Focus Mode while timer is running */
-    .app.is-running .sidebar,
-    .app.is-running .top-bar,
+    /* Focus Mode: fade surroundings while keeping layout boxes intact so timer NEVER shifts */
+    .app.is-running .topbar,
+    .app.is-running .left-sidebar,
+    .app.is-running .right-sidebar,
+    .app.is-running .scramble-area,
     .app.is-running .last-solve-actions,
     .app.is-running .timer-hint {
       opacity: 0;
       pointer-events: none;
     }
 
-    .sidebar,
-    .top-bar,
+    .topbar,
+    .left-sidebar,
+    .right-sidebar,
+    .scramble-area,
     .last-solve-actions,
     .timer-hint {
       transition: opacity 0.12s ease;
     }
 
-    /* Sidebar */
-    .sidebar {
+    /* Top Navigation Bar */
+    .topbar {
+      height: 58px;
+      flex-shrink: 0;
       background: var(--bg-surface);
-      border-right: 1px solid var(--border-color);
-      display: flex;
-      flex-direction: column;
-      padding: 1.25rem;
-      gap: 1.25rem;
-      min-height: 0;
-    }
-
-    .sidebar-header {
+      border-bottom: 1px solid var(--border-color);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 0.75rem;
+      padding: 0 1.25rem;
+      gap: 1rem;
+      z-index: 10;
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
     }
 
     .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
       font-family: var(--font-mono);
       font-weight: 700;
-      letter-spacing: 0.08em;
-      font-size: 0.95rem;
+      font-size: 1rem;
+      letter-spacing: 0.04em;
+    }
+
+    .brand-icon {
+      width: 22px;
+      height: 22px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+      padding: 2px;
+      border: 1px solid var(--border-strong);
+      border-radius: 4px;
+    }
+
+    .brand-icon span {
+      background: var(--text-primary);
+      border-radius: 1px;
+    }
+
+    .brand-icon span.dim {
+      background: var(--text-muted);
     }
 
     .brand-muted {
-      color: var(--text-muted);
+      color: var(--text-secondary);
+      font-weight: 400;
+    }
+
+    .nav-tabs {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 3px;
+    }
+
+    .nav-tab {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      padding: 0.35rem 0.8rem;
+      border-radius: 6px;
+      font-size: 0.84rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+
+    .nav-tab:hover {
+      color: var(--text-primary);
+    }
+
+    .nav-tab.active {
+      background: var(--text-primary);
+      color: var(--bg-primary);
+      font-weight: 600;
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
     }
 
     .select {
@@ -108,156 +178,192 @@
       border: 1px solid var(--border-color);
       border-radius: var(--radius);
       padding: 0.4rem 0.65rem;
-      font-size: 0.875rem;
+      font-size: 0.84rem;
       cursor: pointer;
     }
 
-    /* Stats */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.6rem;
-    }
-
-    .stat-card {
+    .profile-pill {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
       background: var(--bg-elevated);
+      color: var(--text-primary);
       border: 1px solid var(--border-color);
-      border-radius: var(--radius);
-      padding: 0.65rem 0.75rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.2rem;
+      border-radius: 999px;
+      padding: 0.3rem 0.75rem 0.3rem 0.4rem;
+      font-size: 0.82rem;
+      cursor: pointer;
     }
 
-    .stat-label {
-      font-size: 0.72rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-secondary);
+    .profile-pill:hover {
+      border-color: var(--border-strong);
     }
 
-    .stat-value {
+    .avatar {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--text-primary);
+      color: var(--bg-primary);
       font-family: var(--font-mono);
-      font-variant-numeric: tabular-nums;
-      font-size: 1.05rem;
-      font-weight: 600;
+      font-size: 0.72rem;
+      font-weight: 700;
+      display: grid;
+      place-items: center;
     }
 
-    /* History */
-    .history-section {
-      display: flex;
-      flex-direction: column;
+    /* Views */
+    .view {
       flex: 1;
       min-height: 0;
     }
 
-    .history-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-secondary);
-      padding-bottom: 0.5rem;
-      border-bottom: 1px solid var(--border-color);
+    /* Symmetrical 3-Column Timer Workspace */
+    .timer-layout {
+      display: grid;
+      grid-template-columns: var(--sidebar-width) 1fr var(--sidebar-width);
+      height: 100%;
     }
 
-    .history-actions {
-      display: flex;
-      gap: 0.75rem;
-    }
-
-    .solve-list {
-      list-style: none;
-      overflow-y: auto;
-      flex: 1;
-      margin-top: 0.5rem;
-      padding-right: 0.25rem;
-    }
-
-    .solve-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0.45rem 0.5rem;
-      border-radius: 6px;
-      cursor: pointer;
-      font-family: var(--font-mono);
-      font-variant-numeric: tabular-nums;
-      font-size: 0.9rem;
-    }
-
-    .solve-item:hover {
-      background: var(--bg-elevated);
-    }
-
-    .solve-index {
-      color: var(--text-muted);
-      font-size: 0.78rem;
-      min-width: 2.2rem;
-    }
-
-    .solve-time {
-      flex: 1;
-    }
-
-    .solve-item-actions {
-      display: flex;
-      gap: 0.25rem;
-      opacity: 0;
-    }
-
-    .solve-item:hover .solve-item-actions {
-      opacity: 1;
-    }
-
-    .mini-btn {
-      background: transparent;
-      border: 1px solid var(--border-color);
-      color: var(--text-secondary);
-      border-radius: 4px;
-      font-size: 0.7rem;
-      padding: 0.1rem 0.35rem;
-      cursor: pointer;
-    }
-
-    .mini-btn:hover,
-    .mini-btn.active {
-      color: var(--text-primary);
-      border-color: var(--text-primary);
-    }
-
-    /* Main Stage */
-    .main-stage {
+    .left-sidebar,
+    .right-sidebar {
+      background: var(--bg-surface);
+      padding: 1rem;
       display: flex;
       flex-direction: column;
-      height: 100%;
-      position: relative;
+      gap: 0.9rem;
+      min-height: 0;
+      overflow-y: auto;
     }
 
-    .top-bar {
+    .left-sidebar {
+      border-right: 1px solid var(--border-color);
+    }
+
+    .right-sidebar {
+      border-left: 1px solid var(--border-color);
+    }
+
+    .panel-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 0.8rem;
       display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      padding: 1.5rem 2rem 1rem;
-      gap: 1rem;
+      flex-direction: column;
+      gap: 0.6rem;
     }
 
-    .scramble-wrapper {
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-secondary);
+    }
+
+    .preview-box {
+      width: 100%;
+      height: 185px;
+      display: grid;
+      place-items: center;
+      position: relative;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .preview-box twisty-player {
+      width: 100%;
+      height: 100%;
+    }
+
+    .preview-controls {
+      display: flex;
+      gap: 0.4rem;
+    }
+
+    .preview-controls .btn-outline {
       flex: 1;
+      padding: 0.3rem 0.5rem;
+      font-size: 0.75rem;
+    }
+
+    /* Trend Sparkline */
+    .sparkline-wrap {
+      width: 100%;
+      height: 76px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+
+    .sparkline-empty {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* Goal Tracker */
+    .goal-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-family: var(--font-mono);
+      font-size: 0.88rem;
+    }
+
+    .goal-bar {
+      width: 100%;
+      height: 6px;
+      background: var(--bg-primary);
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+    }
+
+    .goal-fill {
+      height: 100%;
+      background: var(--text-primary);
+      width: 0%;
+      transition: width 0.2s ease;
+    }
+
+    /* Center Stage: 1fr auto 1fr locks Timer vertically + horizontally dead-center */
+    .center-stage {
+      display: grid;
+      grid-template-rows: 1fr auto 1fr;
+      align-items: center;
+      justify-items: center;
+      padding: 1.5rem 2rem;
+      user-select: none;
+      touch-action: none;
+      cursor: pointer;
+      position: relative;
+      min-width: 0;
+    }
+
+    .scramble-area {
+      align-self: end;
+      padding-bottom: 1.75rem;
       text-align: center;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 0.75rem;
+      gap: 0.65rem;
+      max-width: 780px;
+      cursor: default;
     }
 
     .scramble-text {
       font-family: var(--font-mono);
       font-size: var(--scramble-size);
-      line-height: 1.5;
-      max-width: 820px;
+      line-height: 1.45;
       letter-spacing: 0.02em;
       user-select: text;
     }
@@ -269,22 +375,15 @@
     }
 
     .scramble-status {
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       color: var(--text-muted);
     }
 
-    /* Timer Zone */
-    .timer-zone {
-      flex: 1;
+    .timer-core {
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      user-select: none;
-      touch-action: none;
-      cursor: pointer;
-      padding: 2rem;
-      gap: 1rem;
+      gap: 0.8rem;
     }
 
     .timer-display {
@@ -297,34 +396,358 @@
       transition: color 0.06s linear, transform 0.08s ease;
     }
 
-    .timer-zone[data-state="holding"] .timer-display {
+    .center-stage[data-state="holding"] .timer-display {
       color: var(--state-holding);
     }
 
-    .timer-zone[data-state="ready"] .timer-display {
+    .center-stage[data-state="ready"] .timer-display {
       color: var(--state-ready);
       transform: scale(1.03);
     }
 
-    .timer-zone[data-state="running"] .timer-display {
+    .center-stage[data-state="running"] .timer-display {
       color: var(--state-running);
     }
 
     .timer-hint {
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       color: var(--text-muted);
-      letter-spacing: 0.04em;
+      letter-spacing: 0.06em;
       text-transform: uppercase;
     }
 
-    .timer-zone[data-state="ready"] .timer-hint {
+    .center-stage[data-state="ready"] .timer-hint {
       color: var(--state-ready);
+    }
+
+    .bottom-stage {
+      align-self: start;
+      padding-top: 1.25rem;
     }
 
     .last-solve-actions {
       display: flex;
       gap: 0.5rem;
-      margin-top: 0.5rem;
+      cursor: default;
+    }
+
+    /* Right Sidebar: Stats + Solves */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+
+    .stat-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 0.55rem 0.7rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+
+    .stat-label {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-secondary);
+    }
+
+    .stat-value {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .history-section {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-secondary);
+      padding-bottom: 0.45rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .history-actions {
+      display: flex;
+      gap: 0.65rem;
+    }
+
+    .solve-list {
+      list-style: none;
+      overflow-y: auto;
+      flex: 1;
+      margin-top: 0.45rem;
+      padding-right: 0.2rem;
+    }
+
+    .solve-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.42rem 0.45rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 0.88rem;
+    }
+
+    .solve-item:hover {
+      background: var(--bg-elevated);
+    }
+
+    .solve-index {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      min-width: 2.1rem;
+    }
+
+    .solve-time {
+      flex: 1;
+    }
+
+    .solve-item-actions {
+      display: flex;
+      gap: 0.22rem;
+      opacity: 0;
+    }
+
+    .solve-item:hover .solve-item-actions {
+      opacity: 1;
+    }
+
+    .mini-btn {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      border-radius: 4px;
+      font-size: 0.68rem;
+      padding: 0.08rem 0.32rem;
+      cursor: pointer;
+    }
+
+    .mini-btn:hover,
+    .mini-btn.active {
+      color: var(--text-primary);
+      border-color: var(--text-primary);
+    }
+
+    /* Alg Learner & CFOP Guide Views */
+    .page-scroll {
+      height: 100%;
+      overflow-y: auto;
+      padding: 1.75rem 2rem;
+      max-width: 1180px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .page-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 1rem;
+    }
+
+    .page-title {
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+
+    .page-subtitle {
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      margin-top: 0.25rem;
+    }
+
+    .filter-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .alg-workspace {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 1.25rem;
+      align-items: start;
+    }
+
+    .alg-simulator {
+      position: sticky;
+      top: 0;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .alg-sim-player {
+      width: 100%;
+      height: 240px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .alg-sim-player twisty-player {
+      width: 100%;
+      height: 100%;
+    }
+
+    .alg-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .alg-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 0.9rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      cursor: pointer;
+      transition: border-color 0.12s;
+    }
+
+    .alg-card:hover,
+    .alg-card.selected {
+      border-color: var(--text-primary);
+    }
+
+    .alg-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .alg-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .alg-tag {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+    }
+
+    .alg-moves {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 0.5rem 0.6rem;
+      line-height: 1.45;
+    }
+
+    .alg-tip {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .alg-card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: auto;
+      padding-top: 0.25rem;
+    }
+
+    /* CFOP Guide */
+    .stage-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 1.25rem;
+      align-items: start;
+    }
+
+    .stage-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+
+    .stage-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 1.1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      cursor: pointer;
+    }
+
+    .stage-card.active {
+      border-color: var(--text-primary);
+    }
+
+    .stage-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .stage-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .stage-split {
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-color);
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+    }
+
+    .stage-points {
+      padding-left: 1.15rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      font-size: 0.86rem;
+      color: var(--text-secondary);
+      line-height: 1.45;
+    }
+
+    .stage-points strong {
+      color: var(--text-primary);
     }
 
     /* Buttons */
@@ -332,7 +755,7 @@
       background: none;
       border: none;
       color: var(--text-secondary);
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       cursor: pointer;
     }
 
@@ -345,8 +768,8 @@
       color: var(--text-secondary);
       border: 1px solid var(--border-color);
       border-radius: var(--radius);
-      padding: 0.4rem 0.8rem;
-      font-size: 0.82rem;
+      padding: 0.38rem 0.75rem;
+      font-size: 0.8rem;
       cursor: pointer;
     }
 
@@ -374,13 +797,13 @@
     }
 
     .btn-icon {
-      background: var(--bg-surface);
+      background: var(--bg-elevated);
       color: var(--text-secondary);
       border: 1px solid var(--border-color);
       border-radius: var(--radius);
-      width: 36px;
-      height: 36px;
-      font-size: 1rem;
+      width: 34px;
+      height: 34px;
+      font-size: 0.95rem;
       cursor: pointer;
       display: grid;
       place-items: center;
@@ -430,7 +853,7 @@
       display: flex;
       flex-direction: column;
       gap: 0.35rem;
-      font-size: 0.88rem;
+      font-size: 0.86rem;
       color: var(--text-secondary);
     }
 
@@ -438,8 +861,17 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 0.88rem;
+      font-size: 0.86rem;
       color: var(--text-secondary);
+    }
+
+    .input-text {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius);
+      padding: 0.45rem 0.65rem;
+      font-size: 0.88rem;
     }
 
     .divider {
@@ -471,33 +903,69 @@
       gap: 0.5rem;
     }
 
-    @media (max-width: 820px) {
+    /* Responsive */
+    @media (max-width: 960px) {
       .app {
-        grid-template-columns: 1fr;
-        grid-template-rows: 1fr auto;
         height: auto;
         min-height: 100vh;
         overflow: auto;
       }
 
-      .main-stage {
-        order: 1;
-        min-height: 65vh;
+      .timer-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto;
       }
 
-      .sidebar {
+      .center-stage {
+        order: 1;
+        min-height: 62vh;
+      }
+
+      .left-sidebar {
         order: 2;
         border-right: none;
         border-top: 1px solid var(--border-color);
+      }
+
+      .right-sidebar {
+        order: 3;
+        border-left: none;
+        border-top: 1px solid var(--border-color);
+      }
+
+      .alg-workspace,
+      .stage-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .alg-simulator {
+        position: static;
       }
     }
   </style>
 </head>
 <body>
   <div id="app" class="app">
-    <aside class="sidebar">
-      <header class="sidebar-header">
-        <div class="brand">MONO<span class="brand-muted">//TIMER</span></div>
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="brand">
+          <div class="brand-icon" aria-hidden="true">
+            <span></span><span></span><span class="dim"></span>
+            <span></span><span class="dim"></span><span></span>
+            <span class="dim"></span><span></span><span></span>
+          </div>
+          <span>Alg<span class="brand-muted">Timer</span></span>
+        </div>
+
+        <nav class="nav-tabs" aria-label="Primary Views">
+          <button class="nav-tab active" data-tab="timer" type="button">Timer</button>
+          <button class="nav-tab" data-tab="algs" type="button">Alg Learner</button>
+          <button class="nav-tab" data-tab="cfop" type="button">CFOP Guide</button>
+        </nav>
+      </div>
+
+      <div class="topbar-right">
         <select id="event-select" class="select" aria-label="WCA Event">
           <option value="333">3x3x3</option>
           <option value="222">2x2x2</option>
@@ -513,42 +981,69 @@
           <option value="clock">Clock</option>
           <option value="minx">Megaminx</option>
         </select>
-      </header>
 
-      <section class="stats-grid" aria-label="Session Statistics">
-        <div class="stat-card">
-          <span class="stat-label">Best</span>
-          <span id="stat-best" class="stat-value">-</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Ao5</span>
-          <span id="stat-ao5" class="stat-value">-</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Ao12</span>
-          <span id="stat-ao12" class="stat-value">-</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Mean (<span id="stat-count">0</span>)</span>
-          <span id="stat-mean" class="stat-value">-</span>
-        </div>
-      </section>
+        <button id="settings-btn" class="btn-icon" type="button" aria-label="Customize Settings" title="Customize">⚙</button>
 
-      <section class="history-section">
-        <div class="history-header">
-          <span>Solves</span>
-          <div class="history-actions">
-            <button id="export-btn" class="btn-text" type="button" title="Export JSON">Export</button>
-            <button id="clear-session-btn" class="btn-text" type="button" title="Clear current event solves">Clear</button>
+        <button id="profile-btn" class="profile-pill" type="button" title="Local Profile">
+          <span id="profile-avatar" class="avatar">C</span>
+          <span id="profile-name-label">Cuber</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- VIEW 1: TIMER -->
+    <main id="view-timer" class="view timer-layout">
+      <!-- Left Sidebar: 3D Scramble + Trend + Goal -->
+      <aside class="left-sidebar">
+        <div class="panel-card">
+          <div class="panel-header">
+            <span>Scramble Preview</span>
+            <span id="preview-mode-badge">3D</span>
+          </div>
+          <div class="preview-box">
+            <twisty-player
+              id="scramble-player"
+              puzzle="3x3x3"
+              visualization="3D"
+              background="none"
+              control-panel="none"
+              hint-facelets="none"
+            ></twisty-player>
+          </div>
+          <div class="preview-controls">
+            <button id="toggle-dim-btn" class="btn-outline" type="button">Switch to 2D</button>
+            <button id="reset-cam-btn" class="btn-outline" type="button">Reset View</button>
           </div>
         </div>
-        <ul id="solve-list" class="solve-list"></ul>
-      </section>
-    </aside>
 
-    <main class="main-stage">
-      <header class="top-bar">
-        <div class="scramble-wrapper">
+        <div class="panel-card">
+          <div class="panel-header">
+            <span>Session Trend</span>
+            <span id="trend-range-label">Last 20</span>
+          </div>
+          <div id="sparkline-wrap" class="sparkline-wrap">
+            <span class="sparkline-empty">Complete 2+ solves for graph</span>
+          </div>
+        </div>
+
+        <div class="panel-card">
+          <div class="panel-header">
+            <span>Goal Tracker</span>
+            <button id="edit-goal-btn" class="btn-text" type="button">Edit</button>
+          </div>
+          <div class="goal-row">
+            <span id="goal-target-label">Target: Sub-15.00</span>
+            <span id="goal-current-label" class="muted-text">Ao5: -</span>
+          </div>
+          <div class="goal-bar">
+            <div id="goal-fill" class="goal-fill"></div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center Stage: Scramble + Dead-Center Timer + Actions -->
+      <section id="timer-zone" class="center-stage" data-state="idle">
+        <div class="scramble-area">
           <p id="scramble-text" class="scramble-text">Loading scramble...</p>
           <div class="scramble-controls">
             <span id="scramble-status" class="scramble-status"></span>
@@ -556,22 +1051,133 @@
             <button id="copy-scramble-btn" class="btn-outline" type="button">Copy</button>
           </div>
         </div>
-        <button id="settings-btn" class="btn-icon" type="button" aria-label="Customize Settings" title="Customize">
-          ⚙
-        </button>
-      </header>
 
-      <section id="timer-zone" class="timer-zone" data-state="idle">
-        <div id="timer-display" class="timer-display">0.00</div>
-        <div id="timer-hint" class="timer-hint">Hold SPACE or CLICK to ready</div>
+        <div class="timer-core">
+          <div id="timer-display" class="timer-display">0.00</div>
+          <div id="timer-hint" class="timer-hint">Hold SPACE or CLICK to ready</div>
+        </div>
 
-        <div id="last-solve-actions" class="last-solve-actions hidden">
-          <button id="last-plus2-btn" class="btn-pill" type="button">+2</button>
-          <button id="last-dnf-btn" class="btn-pill" type="button">DNF</button>
-          <button id="last-del-btn" class="btn-pill" type="button">Delete</button>
+        <div class="bottom-stage">
+          <div id="last-solve-actions" class="last-solve-actions hidden">
+            <button id="last-plus2-btn" class="btn-pill" type="button">+2</button>
+            <button id="last-dnf-btn" class="btn-pill" type="button">DNF</button>
+            <button id="last-del-btn" class="btn-pill" type="button">Delete</button>
+          </div>
         </div>
       </section>
+
+      <!-- Right Sidebar: Stats + Solves -->
+      <aside class="right-sidebar">
+        <section class="stats-grid" aria-label="Session Statistics">
+          <div class="stat-card">
+            <span class="stat-label">Best</span>
+            <span id="stat-best" class="stat-value">-</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Ao5</span>
+            <span id="stat-ao5" class="stat-value">-</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Ao12</span>
+            <span id="stat-ao12" class="stat-value">-</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Mean (<span id="stat-count">0</span>)</span>
+            <span id="stat-mean" class="stat-value">-</span>
+          </div>
+        </section>
+
+        <section class="history-section">
+          <div class="history-header">
+            <span>Solves</span>
+            <div class="history-actions">
+              <button id="export-btn" class="btn-text" type="button">Export</button>
+              <button id="clear-session-btn" class="btn-text" type="button">Clear</button>
+            </div>
+          </div>
+          <ul id="solve-list" class="solve-list"></ul>
+        </section>
+      </aside>
     </main>
+
+    <!-- VIEW 2: ALG LEARNER -->
+    <section id="view-algs" class="view hidden">
+      <div class="page-scroll">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Alg Learner</h1>
+            <p class="page-subtitle">Click any algorithm to watch it step-by-step on the 3D cube and track what you've learned.</p>
+          </div>
+          <div id="alg-filter-pills" class="filter-pills">
+            <button class="btn-pill active" data-cat="ALL" type="button">All</button>
+            <button class="btn-pill" data-cat="PLL" type="button">PLL</button>
+            <button class="btn-pill" data-cat="OLL" type="button">2-Look OLL</button>
+            <button class="btn-pill" data-cat="F2L" type="button">Key F2L</button>
+          </div>
+        </div>
+
+        <div class="alg-workspace">
+          <div class="alg-simulator">
+            <div class="panel-header">
+              <span id="alg-sim-title">Select an Algorithm</span>
+              <span id="alg-sim-cat" class="alg-tag">PLL</span>
+            </div>
+            <div class="alg-sim-player">
+              <twisty-player
+                id="alg-player"
+                puzzle="3x3x3"
+                visualization="3D"
+                background="none"
+                experimental-setup-anchor="end"
+                experimental-stickering="PLL"
+                alg="R U R' U' R' F R2 U' R' U' R U R' F'"
+              ></twisty-player>
+            </div>
+            <p id="alg-sim-moves" class="alg-moves">R U R' U' R' F R2 U' R' U' R U R' F'</p>
+            <p id="alg-sim-tip" class="alg-tip">Recognize by headlights on left + adjacent solved block.</p>
+          </div>
+
+          <div id="alg-grid" class="alg-grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 3: CFOP SOLVE GUIDE -->
+    <section id="view-cfop" class="view hidden">
+      <div class="page-scroll">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">CFOP Solve Stages</h1>
+            <p class="page-subtitle">Break down every part of your solve—Cross, F2L, OLL, and PLL—with live 3D stickering previews.</p>
+          </div>
+        </div>
+
+        <div class="stage-grid">
+          <div id="stage-list" class="stage-list"></div>
+
+          <div class="alg-simulator">
+            <div class="panel-header">
+              <span id="stage-sim-title">Stage 1: Cross</span>
+              <span id="stage-sim-badge" class="alg-tag">~12% of solve</span>
+            </div>
+            <div class="alg-sim-player">
+              <twisty-player
+                id="stage-player"
+                puzzle="3x3x3"
+                visualization="3D"
+                background="none"
+                experimental-setup-anchor="end"
+                experimental-stickering="Cross"
+                alg="F R' D' R F2"
+              ></twisty-player>
+            </div>
+            <p id="stage-sim-desc" class="alg-tip">
+              Press Play to see the stage stickering in action—irrelevant pieces are dimmed so you can focus only on what matters for that step.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
 
   <!-- Settings Modal -->
@@ -607,7 +1213,7 @@
 
         <label class="field">
           <span>Scramble Size</span>
-          <input id="setting-scramble-size" type="range" min="1" max="2.5" step="0.1" />
+          <input id="setting-scramble-size" type="range" min="1" max="2.4" step="0.1" />
         </label>
 
         <div class="divider"></div>
@@ -634,6 +1240,33 @@
     </div>
   </div>
 
+  <!-- Profile Modal -->
+  <div id="profile-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="profile-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="profile-title">Cuber Profile</h2>
+        <button id="close-profile-btn" class="btn-icon" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="field">
+          <span>Display Name</span>
+          <input id="profile-name-input" class="input-text" type="text" maxlength="20" placeholder="Cuber" />
+        </label>
+        <label class="field">
+          <span>Main Method</span>
+          <select id="profile-method-select" class="select">
+            <option value="CFOP">CFOP</option>
+            <option value="Roux">Roux</option>
+            <option value="ZZ">ZZ</option>
+            <option value="Beginner">Beginner Layer-by-Layer</option>
+          </select>
+        </label>
+        <p class="muted-text">Saved locally in your browser. Cloud sync & accounts can be added later.</p>
+        <button id="save-profile-btn" class="btn-outline full-width" type="button">Save Profile</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Solve Detail Modal -->
   <div id="solve-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="solve-modal-time">
     <div class="modal-card">
@@ -656,8 +1289,93 @@
   <script type="module">
     let randomScrambleForEvent = null;
 
-    const STORAGE_SOLVES_KEY = "mono_timer_solves_v1";
-    const STORAGE_SETTINGS_KEY = "mono_timer_settings_v1";
+    const STORAGE_SOLVES_KEY = "algtimer_solves_v1";
+    const STORAGE_SETTINGS_KEY = "algtimer_settings_v1";
+    const STORAGE_LEARNED_KEY = "algtimer_learned_v1";
+
+    const EVENT_TO_PUZZLE = {
+      "333": "3x3x3",
+      "222": "2x2x2",
+      "444": "4x4x4",
+      "555": "5x5x5",
+      "666": "6x6x6",
+      "777": "7x7x7",
+      "333oh": "3x3x3",
+      "333bf": "3x3x3",
+      "pyram": "pyraminx",
+      "skewb": "skewb",
+      "sq1": "square1",
+      "clock": "clock",
+      "minx": "megaminx",
+    };
+
+    const ALGS = [
+      { id: "pll-t", name: "T-Perm", cat: "PLL", stickering: "PLL", alg: "R U R' U' R' F R2 U' R' U' R U R' F'", tip: "Headlights on left + 2 matching corner-edge bars on top/bottom." },
+      { id: "pll-jb", name: "Jb-Perm", cat: "PLL", stickering: "PLL", alg: "R U R' F' R U R' U' R' F R2 U' R' U'", tip: "Full 3-sticker bar on the left, matching 2-sticker block in front-right." },
+      { id: "pll-ua", name: "Ua-Perm", cat: "PLL", stickering: "PLL", alg: "R U' R U R U R U' R' U' R2", tip: "Solved bar in back; front edge cycles counter-clockwise." },
+      { id: "pll-ub", name: "Ub-Perm", cat: "PLL", stickering: "PLL", alg: "R2 U R U R' U' R' U' R' U R'", tip: "Solved bar in back; front edge cycles clockwise." },
+      { id: "pll-h", name: "H-Perm", cat: "PLL", stickering: "PLL", alg: "M2 U M2 U2 M2 U M2", tip: "Opposite edge swap across all 4 sides." },
+      { id: "pll-y", name: "Y-Perm", cat: "PLL", stickering: "PLL", alg: "F R U' R' U' R U R' F' R U R' U' R' F R F'", tip: "Diagonal corner swap with two adjacent blocks." },
+      { id: "oll-sune", name: "Sune (OLL 27)", cat: "OLL", stickering: "OLL", alg: "R U R' U R U2 R'", tip: "1 oriented corner in front-left; sticker faces you on front-right." },
+      { id: "oll-antisune", name: "Anti-Sune (OLL 26)", cat: "OLL", stickering: "OLL", alg: "R U2 R' U' R U' R'", tip: "1 oriented corner in front-right; mirror of Sune." },
+      { id: "oll-headlights", name: "U / Headlights (OLL 23)", cat: "OLL", stickering: "OLL", alg: "R2 D R' U2 R D' R' U2 R'", tip: "Two corners solved in back, headlights facing front." },
+      { id: "oll-line", name: "EO Line (OLL 45)", cat: "OLL", stickering: "OLL", alg: "F R U R' U' F'", tip: "2-Look OLL edge orientation when you have a horizontal bar." },
+      { id: "oll-l", name: "EO L-Shape (OLL 44)", cat: "OLL", stickering: "OLL", alg: "f R U R' U' f'", tip: "2-Look OLL edge orientation for the 9-o'clock L-shape." },
+      { id: "f2l-basic", name: "Basic Insert", cat: "F2L", stickering: "F2L", alg: "U R U' R'", tip: "Opposite top colors, corner in UFR facing right—pair & insert in 4 moves." },
+      { id: "f2l-split", name: "Split & Pair", cat: "F2L", stickering: "F2L", alg: "R U' R' U R U' R' U2 R U' R'", tip: "Corner and edge touch with mismatching colors; separate then pair." },
+      { id: "f2l-flipped", name: "Flipped Edge in Slot", cat: "F2L", stickering: "F2L", alg: "R U' R' U R U2 R' U R U' R'", tip: "Take out the trapped pair cleanly without breaking solved slots." },
+    ];
+
+    const CFOP_STAGES = [
+      {
+        id: "cross",
+        title: "1. Cross",
+        split: "~12% of solve • <= 8 moves",
+        stickering: "Cross",
+        alg: "F R' D' R F2",
+        points: [
+          "<strong>Solve on the bottom (D):</strong> Never flip the cube over after finishing the cross—keep white/yellow on D.",
+          "<strong>Plan all 4 edges in inspection:</strong> Know the relative color order (Blue-Orange-Green-Red) so you don't need centers aligned yet.",
+          "<strong>8-move rule:</strong> Every 3x3 cross can be solved in 8 moves or fewer. Practice blindfolded cross solves to build lookahead into F2L.",
+        ],
+      },
+      {
+        id: "f2l",
+        title: "2. F2L (First Two Layers)",
+        split: "~50% of solve • Core speed gain",
+        stickering: "F2L",
+        alg: "U R U' R' U' F' U F",
+        points: [
+          "<strong>Back slots first:</strong> Fill BL and BR early so upcoming pairs stay visible in front.",
+          "<strong>Avoid unnecessary rotations:</strong> Learn basic wide/F-move inserts or sledgehammers (`R' F R F'`) instead of rotating twice.",
+          "<strong>Slow-turn lookahead drill:</strong> Turn at 60% speed with zero pauses between pairs—smoothness beats raw TPS.",
+        ],
+      },
+      {
+        id: "oll",
+        title: "3. OLL (Orient Last Layer)",
+        split: "~18% of solve • 2-Look -> 57 algs",
+        stickering: "OLL",
+        alg: "F R U R' U' F' R U R' U R U2 R'",
+        points: [
+          "<strong>Start with 2-Look OLL:</strong> Learn the 3 edge-orientation shapes (Dot, L, Line) + 7 corner cases (Sune, Anti-Sune, H, Pi, U, T, L).",
+          "<strong>Use triggers:</strong> Group moves into muscle-memory chunks like Sexy (`R U R' U'`) and Sledge (`R' F R F'`).",
+          "<strong>AUF awareness:</strong> Predict where the U-layer corners land to transition smoothly into PLL.",
+        ],
+      },
+      {
+        id: "pll",
+        title: "4. PLL (Permute Last Layer)",
+        split: "~20% of solve • 21 algs",
+        stickering: "PLL",
+        alg: "R U R' U' R' F R2 U' R' U' R U R' F'",
+        points: [
+          "<strong>2-Look PLL first:</strong> Learn Aa/Y-Perm for corners and Ua/Ub/H/Z for edges—only 6 algs total.",
+          "<strong>2-sided recognition:</strong> Look at just the Front and Right faces for blocks and headlights instead of spinning the cube.",
+          "<strong>No U-turns before starting:</strong> Hold the cube steady and adjust U at the end (AUF) whenever possible.",
+        ],
+      },
+    ];
 
     const DEFAULT_SETTINGS = {
       event: "333",
@@ -665,17 +1383,27 @@
       decimals: 2,
       focusMode: true,
       timerSize: 7.5,
-      scrambleSize: 1.35,
+      scrambleSize: 1.3,
       bgColor: "#0a0a0a",
       textColor: "#f5f5f5",
       readyColor: "#ffffff",
+      goalMs: 15000,
+      previewDim: "3D",
+      profileName: "Cuber",
+      profileMethod: "CFOP",
     };
 
     let settings = loadSettings();
     let solves = loadSolves();
+    let learnedAlgs = loadLearned();
 
-    let timerState = "idle"; // "idle" | "holding" | "ready" | "running" | "stopping"
-    let activeTrigger = null; // "space" | "pointer" | null
+    let activeTab = "timer"; // "timer" | "algs" | "cfop"
+    let activeAlgFilter = "ALL";
+    let selectedAlgId = ALGS[0].id;
+    let selectedStageId = CFOP_STAGES[0].id;
+
+    let timerState = "idle";
+    let activeTrigger = null;
     let holdTimeoutId = null;
     let startTime = 0;
     let rafId = null;
@@ -686,8 +1414,24 @@
     let prefetchedEvent = null;
     let selectedSolveId = null;
 
+    // DOM Elements
     const appEl = document.getElementById("app");
+    const navTabs = document.querySelectorAll(".nav-tab");
+    const viewTimer = document.getElementById("view-timer");
+    const viewAlgs = document.getElementById("view-algs");
+    const viewCfop = document.getElementById("view-cfop");
+
     const eventSelect = document.getElementById("event-select");
+    const scramblePlayer = document.getElementById("scramble-player");
+    const previewModeBadge = document.getElementById("preview-mode-badge");
+    const toggleDimBtn = document.getElementById("toggle-dim-btn");
+    const resetCamBtn = document.getElementById("reset-cam-btn");
+    const sparklineWrap = document.getElementById("sparkline-wrap");
+    const editGoalBtn = document.getElementById("edit-goal-btn");
+    const goalTargetLabel = document.getElementById("goal-target-label");
+    const goalCurrentLabel = document.getElementById("goal-current-label");
+    const goalFill = document.getElementById("goal-fill");
+
     const scrambleTextEl = document.getElementById("scramble-text");
     const scrambleStatusEl = document.getElementById("scramble-status");
     const newScrambleBtn = document.getElementById("new-scramble-btn");
@@ -711,9 +1455,33 @@
     const clearSessionBtn = document.getElementById("clear-session-btn");
     const exportBtn = document.getElementById("export-btn");
 
+    // Alg & CFOP Elements
+    const algGrid = document.getElementById("alg-grid");
+    const algFilterPills = document.getElementById("alg-filter-pills");
+    const algPlayer = document.getElementById("alg-player");
+    const algSimTitle = document.getElementById("alg-sim-title");
+    const algSimCat = document.getElementById("alg-sim-cat");
+    const algSimMoves = document.getElementById("alg-sim-moves");
+    const algSimTip = document.getElementById("alg-sim-tip");
+
+    const stageList = document.getElementById("stage-list");
+    const stagePlayer = document.getElementById("stage-player");
+    const stageSimTitle = document.getElementById("stage-sim-title");
+    const stageSimBadge = document.getElementById("stage-sim-badge");
+
+    // Modals & Profile
     const settingsModal = document.getElementById("settings-modal");
     const settingsBtn = document.getElementById("settings-btn");
     const closeSettingsBtn = document.getElementById("close-settings-btn");
+
+    const profileBtn = document.getElementById("profile-btn");
+    const profileModal = document.getElementById("profile-modal");
+    const closeProfileBtn = document.getElementById("close-profile-btn");
+    const profileAvatar = document.getElementById("profile-avatar");
+    const profileNameLabel = document.getElementById("profile-name-label");
+    const profileNameInput = document.getElementById("profile-name-input");
+    const profileMethodSelect = document.getElementById("profile-method-select");
+    const saveProfileBtn = document.getElementById("save-profile-btn");
 
     const solveModal = document.getElementById("solve-modal");
     const closeSolveModalBtn = document.getElementById("close-solve-modal-btn");
@@ -724,6 +1492,7 @@
     const modalDnfBtn = document.getElementById("modal-dnf-btn");
     const modalDelBtn = document.getElementById("modal-del-btn");
 
+    // Settings Inputs
     const holdDelayInput = document.getElementById("setting-hold-delay");
     const holdDelayValue = document.getElementById("hold-delay-value");
     const decimalsSelect = document.getElementById("setting-decimals");
@@ -735,10 +1504,21 @@
     const readyColorInput = document.getElementById("setting-ready-color");
     const resetThemeBtn = document.getElementById("reset-theme-btn");
 
+    // ---------- Init ----------
     async function init() {
       eventSelect.value = settings.event;
       applySettingsToUI();
       renderAll();
+      renderAlgs();
+      renderCfop();
+
+      // Load 3D/2D TwistyPlayer & WCA Scrambler from cubing.js
+      try {
+        await import("https://cdn.cubing.net/v0/js/cubing/twisty");
+        updateScramblePreview();
+      } catch (err) {
+        console.warn("TwistyPlayer failed to load:", err);
+      }
 
       try {
         const mod = await import("https://cdn.cubing.net/v0/js/cubing/scramble");
@@ -746,11 +1526,24 @@
         await loadNextScramble(settings.event);
       } catch (err) {
         console.error("Failed to load cubing/scramble:", err);
-        scrambleTextEl.textContent =
-          "Could not load WCA scrambler. Deploy to Vercel or serve over HTTPS/localhost.";
+        scrambleTextEl.textContent = "Could not load WCA scrambler. Serve over HTTPS/localhost.";
       }
     }
 
+    // ---------- Tabs ----------
+    navTabs.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (timerState === "running") return;
+        activeTab = btn.dataset.tab;
+        navTabs.forEach((b) => b.classList.toggle("active", b === btn));
+        viewTimer.classList.toggle("hidden", activeTab !== "timer");
+        viewAlgs.classList.toggle("hidden", activeTab !== "algs");
+        viewCfop.classList.toggle("hidden", activeTab !== "cfop");
+        btn.blur();
+      });
+    });
+
+    // ---------- WCA Scrambles & 3D Preview ----------
     async function generateScramble(eventId) {
       if (!randomScrambleForEvent) return "";
       const alg = await randomScrambleForEvent(eventId);
@@ -773,6 +1566,7 @@
           currentScramble = scramble;
           scrambleTextEl.textContent = currentScramble;
           scrambleStatusEl.textContent = "";
+          updateScramblePreview();
           prefetchScramble(eventId);
         }
       } catch (err) {
@@ -793,6 +1587,42 @@
       }
     }
 
+    function updateScramblePreview() {
+      const puzzle = EVENT_TO_PUZZLE[settings.event] || "3x3x3";
+      const dim = settings.event === "clock" ? "2D" : settings.previewDim;
+      scramblePlayer.setAttribute("puzzle", puzzle);
+      scramblePlayer.setAttribute("visualization", dim);
+      scramblePlayer.setAttribute("experimental-setup-alg", currentScramble || "");
+      scramblePlayer.setAttribute("alg", "");
+      try {
+        scramblePlayer.puzzle = puzzle;
+        scramblePlayer.visualization = dim;
+        scramblePlayer.experimentalSetupAlg = currentScramble || "";
+        scramblePlayer.alg = "";
+      } catch {
+        // Element may still be upgrading
+      }
+      previewModeBadge.textContent = dim;
+      toggleDimBtn.textContent = settings.previewDim === "3D" ? "Switch to 2D" : "Switch to 3D";
+    }
+
+    toggleDimBtn.addEventListener("click", () => {
+      toggleDimBtn.blur();
+      updateSetting("previewDim", settings.previewDim === "3D" ? "2D" : "3D");
+      updateScramblePreview();
+    });
+
+    resetCamBtn.addEventListener("click", () => {
+      resetCamBtn.blur();
+      try {
+        scramblePlayer.cameraLatitude = 30;
+        scramblePlayer.cameraLongitude = 35;
+      } catch {
+        // Ignore if not upgraded
+      }
+    });
+
+    // ---------- Timer State Machine ----------
     function setTimerState(nextState) {
       timerState = nextState;
       timerZone.dataset.state = nextState;
@@ -826,9 +1656,7 @@
 
       setTimerState("holding");
       holdTimeoutId = setTimeout(() => {
-        if (timerState === "holding") {
-          setTimerState("ready");
-        }
+        if (timerState === "holding") setTimerState("ready");
       }, settings.holdDelayMs);
     }
 
@@ -890,7 +1718,11 @@
     }
 
     function isModalOpen() {
-      return !settingsModal.classList.contains("hidden") || !solveModal.classList.contains("hidden");
+      return (
+        !settingsModal.classList.contains("hidden") ||
+        !solveModal.classList.contains("hidden") ||
+        !profileModal.classList.contains("hidden")
+      );
     }
 
     window.addEventListener("keydown", (e) => {
@@ -898,6 +1730,7 @@
         if (e.key === "Escape") closeModals();
         return;
       }
+      if (activeTab !== "timer") return;
 
       if (e.code === "Space") {
         e.preventDefault();
@@ -915,7 +1748,7 @@
     });
 
     window.addEventListener("keyup", (e) => {
-      if (e.code !== "Space") return;
+      if (e.code !== "Space" || activeTab !== "timer") return;
       e.preventDefault();
 
       if (timerState === "holding" && activeTrigger === "space") {
@@ -957,9 +1790,9 @@
     );
 
     timerZone.addEventListener("pointerdown", (e) => {
-      if (isModalOpen()) return;
+      if (isModalOpen() || activeTab !== "timer") return;
       if (e.pointerType === "mouse" && e.button !== 0) return;
-      if (e.target.closest("button, select, input, a")) return;
+      if (e.target.closest("button, select, input, a, .scramble-text")) return;
 
       if (timerState === "idle") {
         e.preventDefault();
@@ -993,6 +1826,7 @@
       }
     });
 
+    // ---------- Stats, Sparkline & Goal ----------
     function getEffectiveMs(solve) {
       if (solve.penalty === "DNF") return Infinity;
       if (solve.penalty === "+2") return solve.rawMs + 2000;
@@ -1010,9 +1844,7 @@
           ? String(remMs).padStart(3, "0")
           : String(Math.floor(remMs / 10)).padStart(2, "0");
 
-      if (minutes > 0) {
-        return `${minutes}:${String(seconds).padStart(2, "0")}.${frac}`;
-      }
+      if (minutes > 0) return `${minutes}:${String(seconds).padStart(2, "0")}.${frac}`;
       return `${seconds}.${frac}`;
     }
 
@@ -1028,8 +1860,7 @@
       recent.sort((a, b) => (a === b ? 0 : a < b ? -1 : 1));
       const middle = recent.slice(1, size - 1);
       if (middle.some((t) => t === Infinity)) return Infinity;
-      const sum = middle.reduce((acc, t) => acc + t, 0);
-      return sum / middle.length;
+      return middle.reduce((acc, t) => acc + t, 0) / middle.length;
     }
 
     function calculateSessionMean(list) {
@@ -1048,6 +1879,61 @@
       return solves.filter((s) => s.event === settings.event);
     }
 
+    function renderSparkline(eventSolves) {
+      const recent = eventSolves.slice(-20).map(getEffectiveMs).filter((t) => t !== Infinity);
+      if (recent.length < 2) {
+        sparklineWrap.innerHTML = `<span class="sparkline-empty">Complete 2+ solves for graph</span>`;
+        return;
+      }
+
+      const w = 230;
+      const h = 68;
+      const pad = 8;
+      const min = Math.min(...recent);
+      const max = Math.max(...recent);
+      const span = Math.max(1, max - min);
+
+      const points = recent
+        .map((t, i) => {
+          const x = pad + (i / (recent.length - 1)) * (w - pad * 2);
+          const y = h - pad - ((t - min) / span) * (h - pad * 2);
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        })
+        .join(" ");
+
+      const dots = recent
+        .map((t, i) => {
+          const x = pad + (i / (recent.length - 1)) * (w - pad * 2);
+          const y = h - pad - ((t - min) / span) * (h - pad * 2);
+          return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2" fill="currentColor" />`;
+        })
+        .join("");
+
+      sparklineWrap.innerHTML = `
+        <svg viewBox="0 0 ${w} ${h}" width="100%" height="100%" style="color: var(--text-primary)">
+          <polyline fill="none" stroke="currentColor" stroke-width="1.6" stroke-opacity="0.85" points="${points}" />
+          ${dots}
+        </svg>
+      `;
+    }
+
+    function renderGoal(ao5) {
+      goalTargetLabel.textContent = `Target: Sub-${formatTime(settings.goalMs, 2)}`;
+      if (ao5 === null) {
+        goalCurrentLabel.textContent = "Ao5: -";
+        goalFill.style.width = "0%";
+        return;
+      }
+      if (ao5 === Infinity) {
+        goalCurrentLabel.textContent = "Ao5: DNF";
+        goalFill.style.width = "10%";
+        return;
+      }
+      goalCurrentLabel.textContent = `Ao5: ${formatTime(ao5, settings.decimals)}`;
+      const ratio = Math.min(100, Math.max(12, Math.round((settings.goalMs / ao5) * 100)));
+      goalFill.style.width = `${ratio}%`;
+    }
+
     function renderAll() {
       const eventSolves = getCurrentEventSolves();
       const dec = settings.decimals;
@@ -1062,6 +1948,9 @@
       statAo12El.textContent = ao12 === null ? "-" : formatTime(ao12, dec);
       statMeanEl.textContent = mean === null ? "-" : formatTime(mean, dec);
       statCountEl.textContent = String(eventSolves.length);
+
+      renderSparkline(eventSolves);
+      renderGoal(ao5);
 
       const latest = eventSolves[eventSolves.length - 1];
       if (latest && timerState !== "running") {
@@ -1110,6 +1999,122 @@
       }
     }
 
+    // ---------- Alg Learner ----------
+    function renderAlgs() {
+      const filtered = activeAlgFilter === "ALL" ? ALGS : ALGS.filter((a) => a.cat === activeAlgFilter);
+      algGrid.innerHTML = "";
+
+      filtered.forEach((item) => {
+        const isLearned = learnedAlgs.includes(item.id);
+        const card = document.createElement("div");
+        card.className = `alg-card ${item.id === selectedAlgId ? "selected" : ""}`;
+        card.innerHTML = `
+          <div class="alg-card-top">
+            <span class="alg-name">${item.name}</span>
+            <span class="alg-tag">${item.cat}</span>
+          </div>
+          <div class="alg-moves">${item.alg}</div>
+          <p class="alg-tip">${item.tip}</p>
+          <div class="alg-card-footer">
+            <button class="btn-outline" data-act="play" type="button">Preview 3D</button>
+            <button class="btn-pill ${isLearned ? "active" : ""}" data-act="learn" type="button">
+              ${isLearned ? "✓ Learned" : "Mark Learned"}
+            </button>
+          </div>
+        `;
+
+        card.addEventListener("click", (e) => {
+          const learnBtn = e.target.closest('button[data-act="learn"]');
+          if (learnBtn) {
+            e.stopPropagation();
+            if (learnedAlgs.includes(item.id)) {
+              learnedAlgs = learnedAlgs.filter((id) => id !== item.id);
+            } else {
+              learnedAlgs.push(item.id);
+            }
+            localStorage.setItem(STORAGE_LEARNED_KEY, JSON.stringify(learnedAlgs));
+            renderAlgs();
+            return;
+          }
+
+          selectedAlgId = item.id;
+          loadAlgSimulator(item);
+          renderAlgs();
+        });
+
+        algGrid.appendChild(card);
+      });
+
+      const current = ALGS.find((a) => a.id === selectedAlgId) || ALGS[0];
+      loadAlgSimulator(current);
+    }
+
+    function loadAlgSimulator(item) {
+      algSimTitle.textContent = item.name;
+      algSimCat.textContent = item.cat;
+      algSimMoves.textContent = item.alg;
+      algSimTip.textContent = item.tip;
+      algPlayer.setAttribute("experimental-stickering", item.stickering);
+      algPlayer.setAttribute("alg", item.alg);
+      try {
+        algPlayer.experimentalStickering = item.stickering;
+        algPlayer.alg = item.alg;
+        algPlayer.timestamp = 0;
+      } catch {
+        // Ignore if not upgraded yet
+      }
+    }
+
+    algFilterPills.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-cat]");
+      if (!btn) return;
+      activeAlgFilter = btn.dataset.cat;
+      algFilterPills.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b === btn));
+      renderAlgs();
+    });
+
+    // ---------- CFOP Solve Guide ----------
+    function renderCfop() {
+      stageList.innerHTML = "";
+      CFOP_STAGES.forEach((stage) => {
+        const card = document.createElement("div");
+        card.className = `stage-card ${stage.id === selectedStageId ? "active" : ""}`;
+        card.innerHTML = `
+          <div class="stage-header">
+            <span class="stage-title">${stage.title}</span>
+            <span class="stage-split">${stage.split}</span>
+          </div>
+          <ul class="stage-points">
+            ${stage.points.map((p) => `<li>${p}</li>`).join("")}
+          </ul>
+        `;
+        card.addEventListener("click", () => {
+          selectedStageId = stage.id;
+          loadStageSimulator(stage);
+          renderCfop();
+        });
+        stageList.appendChild(card);
+      });
+
+      const activeStage = CFOP_STAGES.find((s) => s.id === selectedStageId) || CFOP_STAGES[0];
+      loadStageSimulator(activeStage);
+    }
+
+    function loadStageSimulator(stage) {
+      stageSimTitle.textContent = stage.title;
+      stageSimBadge.textContent = stage.split;
+      stagePlayer.setAttribute("experimental-stickering", stage.stickering);
+      stagePlayer.setAttribute("alg", stage.alg);
+      try {
+        stagePlayer.experimentalStickering = stage.stickering;
+        stagePlayer.alg = stage.alg;
+        stagePlayer.timestamp = 0;
+      } catch {
+        // Ignore if not upgraded yet
+      }
+    }
+
+    // ---------- Mutations & Controls ----------
     function togglePenalty(id, penaltyType) {
       const solve = solves.find((s) => s.id === id);
       if (!solve) return;
@@ -1150,7 +2155,18 @@
         copyScrambleBtn.textContent = "Copied";
         setTimeout(() => (copyScrambleBtn.textContent = prev), 900);
       } catch {
-        // Clipboard blocked
+        // Ignore clipboard errors
+      }
+    });
+
+    editGoalBtn.addEventListener("click", () => {
+      editGoalBtn.blur();
+      const currentSec = (settings.goalMs / 1000).toFixed(2);
+      const val = prompt("Enter target Ao5 in seconds (e.g. 12.5):", currentSec);
+      if (val === null) return;
+      const num = parseFloat(val);
+      if (!Number.isNaN(num) && num > 0) {
+        updateSetting("goalMs", Math.round(num * 1000));
       }
     });
 
@@ -1186,7 +2202,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `cubing-solves-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `algtimer-solves-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
     });
@@ -1214,12 +2230,24 @@
     });
     closeSolveModalBtn.addEventListener("click", closeModals);
 
-    settingsBtn.addEventListener("click", () => {
-      settingsModal.classList.remove("hidden");
-    });
+    settingsBtn.addEventListener("click", () => settingsModal.classList.remove("hidden"));
     closeSettingsBtn.addEventListener("click", closeModals);
 
-    [settingsModal, solveModal].forEach((modal) => {
+    profileBtn.addEventListener("click", () => {
+      profileNameInput.value = settings.profileName;
+      profileMethodSelect.value = settings.profileMethod;
+      profileModal.classList.remove("hidden");
+    });
+    closeProfileBtn.addEventListener("click", closeModals);
+    saveProfileBtn.addEventListener("click", () => {
+      settings.profileName = profileNameInput.value.trim() || "Cuber";
+      settings.profileMethod = profileMethodSelect.value;
+      saveSettings();
+      applySettingsToUI();
+      closeModals();
+    });
+
+    [settingsModal, solveModal, profileModal].forEach((modal) => {
       modal.addEventListener("click", (e) => {
         if (e.target === modal) closeModals();
       });
@@ -1228,6 +2256,7 @@
     function closeModals() {
       settingsModal.classList.add("hidden");
       solveModal.classList.add("hidden");
+      profileModal.classList.add("hidden");
       selectedSolveId = null;
     }
 
@@ -1248,6 +2277,9 @@
       bgColorInput.value = settings.bgColor;
       textColorInput.value = settings.textColor;
       readyColorInput.value = settings.readyColor;
+
+      profileNameLabel.textContent = settings.profileName;
+      profileAvatar.textContent = (settings.profileName[0] || "C").toUpperCase();
     }
 
     function updateSetting(key, value) {
@@ -1263,14 +2295,17 @@
     timerSizeInput.addEventListener("input", () => updateSetting("timerSize", Number(timerSizeInput.value)));
     scrambleSizeInput.addEventListener("input", () => updateSetting("scrambleSize", Number(scrambleSizeInput.value)));
     bgColorInput.addEventListener("input", () => updateSetting("bgColor", bgColorInput.value));
-    textColorInput.addEventListener("input", () => updateSetting("textColor", bgColorInput.value));
+    textColorInput.addEventListener("input", () => updateSetting("textColor", textColorInput.value));
     readyColorInput.addEventListener("input", () => updateSetting("readyColor", readyColorInput.value));
 
     resetThemeBtn.addEventListener("click", () => {
-      const currentEvent = settings.event;
-      settings = { ...DEFAULT_SETTINGS, event: currentEvent };
+      const keepEvent = settings.event;
+      const keepName = settings.profileName;
+      const keepMethod = settings.profileMethod;
+      settings = { ...DEFAULT_SETTINGS, event: keepEvent, profileName: keepName, profileMethod: keepMethod };
       saveSettings();
       applySettingsToUI();
+      updateScramblePreview();
       renderAll();
     });
 
@@ -1281,11 +2316,9 @@
         return [];
       }
     }
-
     function saveSolves() {
       localStorage.setItem(STORAGE_SOLVES_KEY, JSON.stringify(solves));
     }
-
     function loadSettings() {
       try {
         return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(STORAGE_SETTINGS_KEY)) };
@@ -1293,9 +2326,15 @@
         return { ...DEFAULT_SETTINGS };
       }
     }
-
     function saveSettings() {
       localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(settings));
+    }
+    function loadLearned() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_LEARNED_KEY)) || [];
+      } catch {
+        return [];
+      }
     }
 
     init();
