@@ -1,5 +1,5 @@
 import { EVENT_TO_PUZZLE, CSTIMER_EVENT_MAP, PREMADE_SCENES, QUICK_MOODS, COLOR_PRESETS, SCENE_PRESETS } from "./data.js";
-import { initTrainer, syncMethodViews, onTrainerTabVisible, renderImprovementView, handleImprovementKeyDown, handleImprovementKeyUp, handleImprovementPointerUp, reloadTrainerReps } from "./trainer.js";
+import { initTrainer, syncMethodViews, onTrainerTabVisible, renderImprovementView, handleImprovementKeyDown, handleImprovementKeyUp, handleImprovementPointerUp } from "./trainer.js";
 import { initCloud, signInGoogle, signOutGoogle, scheduleCloudPush } from "./cloud.js";
 
 // === SECTION A1: STORAGE KEYS & DEFAULTS ===
@@ -71,10 +71,8 @@ window.addEventListener("error", (ev) => { if (scrambleStatusEl) scrambleStatusE
 
 // === SECTION A3: TOOLTIPS, DB & INITIALIZATION ===
 function showTooltip(text, x, y) {
-  advChartTooltip.textContent = text;
-  advChartTooltip.classList.remove("hidden");
-  advChartTooltip.style.left = `${x}px`;
-  advChartTooltip.style.top = `${y}px`;
+  advChartTooltip.textContent = text; advChartTooltip.classList.remove("hidden");
+  advChartTooltip.style.left = `${x}px`; advChartTooltip.style.top = `${y}px`;
 }
 function hideTooltip() { advChartTooltip.classList.add("hidden"); }
 
@@ -126,110 +124,60 @@ function switchTab(tabName) {
 
 async function init() {
   initTrainer({
-    getSettings: () => settings,
-    getSolves: () => solves,
-    getActiveTab: () => activeTab,
-    onRepsChanged: pushAllToCloud,
+    getSettings: () => settings, getSolves: () => solves, getActiveTab: () => activeTab,
     formatTime, getEffectiveMs, showToast, switchTab, showTooltip, hideTooltip,
   });
 
-  currentScramble = localFallbackScramble(settings.event);
-  scrambleTextEl.textContent = currentScramble;
-  scrambleStatusEl.textContent = "Connecting WCA...";
-  previewModeBadge.textContent = "Loading...";
-
-  eventSelect.value = settings.event;
-  trendRangeSelect.value = settings.trendRange;
-  applySettingsToUI();
-  applyThemeToDOM(activeTheme, uploadedBgDataUrl);
-  drawColorWheel();
-  syncMethodViews();
-  renderAll();
-
   initCloud((user, info) => {
-    const inBtn = $("google-signin-btn");
-    const outBtn = $("google-signout-btn");
-
+    const inBtn = $("google-signin-btn"), outBtn = $("google-signout-btn");
     if (user) {
       const name = user.displayName || user.email.split("@")[0];
-      $("cloud-status-title").textContent = name;
-      $("cloud-status-sub").textContent = "Auto-syncing solves & alg drills";
-      inBtn.classList.add("hidden");
-      outBtn.classList.remove("hidden");
-
+      $("cloud-status-title").textContent = name; $("cloud-status-sub").textContent = "Auto-syncing solves & alg drills";
+      inBtn.classList.add("hidden"); outBtn.classList.remove("hidden");
       $("profile-name-label").textContent = name;
-      if (user.photoURL) {
-        $("profile-avatar").innerHTML = `<img src="${user.photoURL}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
-      } else {
-        $("profile-avatar").textContent = (name[0] || "C").toUpperCase();
-      }
+      if (user.photoURL) $("profile-avatar").innerHTML = `<img src="${user.photoURL}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+      else $("profile-avatar").textContent = (name[0] || "C").toUpperCase();
+      closeModals(); showToast(`Signed in as ${name}!`);
 
-      // Close the profile modal and confirm
-      closeModals();
-      showToast(`Signed in as ${name}!`);
-
-      // Merge cloud solves if they exist
       if (info?.cloudData?.solves) {
         const cloudSolves = Array.isArray(info.cloudData.solves) ? info.cloudData.solves : [];
-        const seen = new Set(solves.map((s) => s.id));
-        let added = 0;
-        cloudSolves.forEach((cs) => {
-          if (!seen.has(cs.id)) {
-            solves.push(cs);
-            seen.add(cs.id);
-            added++;
-          }
-        });
-        if (added > 0) {
-          solves.sort((a, b) => a.createdAt - b.createdAt);
-          saveSolves();
-          renderAll();
-        }
+        const seen = new Set(solves.map((s) => s.id)); let added = 0;
+        cloudSolves.forEach((cs) => { if (!seen.has(cs.id)) { solves.push(cs); seen.add(cs.id); added++; } });
+        if (added > 0) { solves.sort((a, b) => a.createdAt - b.createdAt); saveSolves(); renderAll(); }
       }
-
       pushAllToCloud();
     } else {
-      $("cloud-status-title").textContent = "Cloud Sync (Off)";
-      $("cloud-status-sub").textContent = "Sign in to save solves across devices";
-      inBtn.classList.remove("hidden");
-      outBtn.classList.add("hidden");
+      $("cloud-status-title").textContent = "Cloud Sync (Off)"; $("cloud-status-sub").textContent = "Sign in to save solves across devices";
+      inBtn.classList.remove("hidden"); outBtn.classList.add("hidden");
       $("profile-avatar").textContent = (settings.profileName[0] || "C").toUpperCase();
     }
   });
 
-$("google-signin-btn").addEventListener("click", async () => {
-    try {
-      const res = await signInGoogle();
-      if (res?.error) showToast(res.error);
-    } catch (e) {
-      showToast(e?.code || e?.message || "Sign-in failed");
-    }
+  $("google-signin-btn").addEventListener("click", async () => {
+    try { const res = await signInGoogle(); if (res?.error) showToast(res.error); } catch (e) { showToast(e?.message || "Sign-in failed"); }
   });
+  $("google-signout-btn").addEventListener("click", () => signOutGoogle());
+
+  currentScramble = localFallbackScramble(settings.event);
+  scrambleTextEl.textContent = currentScramble; scrambleStatusEl.textContent = "Connecting WCA..."; previewModeBadge.textContent = "Loading...";
+
+  eventSelect.value = settings.event; trendRangeSelect.value = settings.trendRange;
+  applySettingsToUI(); applyThemeToDOM(activeTheme, uploadedBgDataUrl);
+  drawColorWheel(); syncMethodViews(); renderAll();
 
   uploadedBgDataUrl = await loadUploadedBg();
   if (uploadedBgDataUrl) applyThemeToDOM(activeTheme, uploadedBgDataUrl);
 
-  ensureScramblerLoaded().then((ok) => {
-    if (ok) { if (timerState === "idle") loadNextScramble(settings.event); }
-    else scrambleStatusEl.textContent = "Offline fallback (Wi-Fi)";
-  });
-
-  importWithTimeout("https://cdn.cubing.net/v0/js/cubing/twisty", 12000)
-    .then(() => updateScramblePreview())
-    .catch(() => { previewModeBadge.textContent = "Offline"; });
+  ensureScramblerLoaded().then((ok) => { if (ok) { if (timerState === "idle") loadNextScramble(settings.event); } else scrambleStatusEl.textContent = "Offline fallback (Wi-Fi)"; });
+  importWithTimeout("https://cdn.cubing.net/v0/js/cubing/twisty", 12000).then(() => updateScramblePreview()).catch(() => { previewModeBadge.textContent = "Offline"; });
 }
 
-function showToast(msg) {
-  toastEl.textContent = msg; toastEl.classList.remove("hidden");
-  clearTimeout(toastTimeoutId);
-  toastTimeoutId = setTimeout(() => toastEl.classList.add("hidden"), 3200);
-}
+function showToast(msg) { toastEl.textContent = msg; toastEl.classList.remove("hidden"); clearTimeout(toastTimeoutId); toastTimeoutId = setTimeout(() => toastEl.classList.add("hidden"), 3200); }
 
 // === SECTION A4: COLOR WHEEL & THEME STUDIO ===
 function hexToRgb(hex) {
   const c = (hex || "#000000").replace("#", ""), full = c.length === 3 ? c.split("").map((x) => x + x).join("") : c;
-  const n = parseInt(full, 16);
-  return Number.isNaN(n) ? { r: 10, g: 10, b: 10 } : { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  const n = parseInt(full, 16); return Number.isNaN(n) ? { r: 10, g: 10, b: 10 } : { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 const hexToRgba = (hex, a) => { const { r, g, b } = hexToRgb(hex); return `rgba(${r}, ${g}, ${b}, ${a})`; };
 const isLightColor = (hex) => { const { r, g, b } = hexToRgb(hex); return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62; };
@@ -241,8 +189,7 @@ function hsvToHex(h, s, v) {
 }
 function hexToHsv(hex) {
   const { r: r0, g: g0, b: b0 } = hexToRgb(hex), r = r0 / 255, g = g0 / 255, b = b0 / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
-  let h = 0;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min; let h = 0;
   if (d !== 0) { h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4; h = (h * 60 + 360) % 360; }
   return { h, s: max === 0 ? 0 : d / max, v: max };
 }
@@ -258,18 +205,15 @@ function drawColorWheel() {
   ctx2.putImageData(img, 0, 0);
 }
 function syncWheelToHex(hex) {
-  wheelHSV = hexToHsv(hex);
-  const c = 76, r = 74, rad = (wheelHSV.h * Math.PI) / 180, d = wheelHSV.s * r;
+  wheelHSV = hexToHsv(hex); const c = 76, r = 74, rad = (wheelHSV.h * Math.PI) / 180, d = wheelHSV.s * r;
   $("wheel-cursor").style.left = `${c + Math.cos(rad) * d}px`; $("wheel-cursor").style.top = `${c + Math.sin(rad) * d}px`;
   $("wheel-val-slider").value = Math.round(wheelHSV.v * 100);
   $("wheel-hex-input").value = hex.toUpperCase(); $("wheel-hex-badge").textContent = hex.toUpperCase();
 }
 function pushColorHistory(hex) {
-  const u = hex.toUpperCase();
-  if (!/^#[0-9A-F]{6}$/.test(u)) return;
+  const u = hex.toUpperCase(); if (!/^#[0-9A-F]{6}$/.test(u)) return;
   colorHistory = [u, ...colorHistory.filter((c) => c !== u)].slice(0, 14);
-  localStorage.setItem(STORAGE_COLOR_HISTORY_KEY, JSON.stringify(colorHistory));
-  renderColorHistory();
+  localStorage.setItem(STORAGE_COLOR_HISTORY_KEY, JSON.stringify(colorHistory)); renderColorHistory();
 }
 function applyDraftSlotColor(hex) {
   if (!draftTheme) return;
@@ -441,7 +385,7 @@ $("save-custom-preset-btn").addEventListener("click", () => {
   draftTheme.presetId = id; renderPresets(); showToast(`Saved "${name.trim()}"`);
 });
 
-// === SECTION A5: SCRAMBLES, 15s INSPECTION & MAIN TIMER ===
+// === SECTION A5: SCRAMBLES, INSPECTION & TIMER ===
 let inspStartTime = null, inspIntervalId = null, inspWarned8 = false, inspWarned12 = false, pendingPenalty = null, armingInspTrigger = null;
 
 function playBeep(freq = 880, dur = 0.09) {
@@ -595,8 +539,7 @@ window.addEventListener("keydown", (e) => {
   }
 });
 window.addEventListener("keyup", (e) => {
-  if (e.code !== "Space") return;
-  e.preventDefault();
+  if (e.code !== "Space") return; e.preventDefault();
   if (activeTab === "improvement") { handleImprovementKeyUp(e); return; }
   if (activeTab !== "timer") return;
   if (armingInspTrigger === "space" && timerState === "idle") { armingInspTrigger = null; startInspection(); }
@@ -627,367 +570,7 @@ window.addEventListener("pointerup", () => {
 window.addEventListener("pointercancel", () => { armingInspTrigger = null; if (timerState === "holding" || timerState === "ready") cancelHold(); else if (timerState === "stopping") finishStopCycle(); });
 window.addEventListener("blur", () => { armingInspTrigger = null; if (timerState === "holding" || timerState === "ready") cancelHold(); else if (timerState === "stopping") finishStopCycle(); });
 
-// === SECTION A6: PB CELEBRATION & STATS ===
-const getEffectiveMs = (s) => s.penalty === "DNF" ? Infinity : s.penalty === "+2" ? s.rawMs + 2000 : s.rawMs;
-function formatTime(ms, dec = 2) {
-  if (ms === Infinity || ms == null || Number.isNaN(ms)) return "DNF";
-  const t = Math.max(0, Math.round(ms)), m = Math.floor(t / 60000), s = Math.floor((t % 60000) / 1000), r = t % 1000;
-  const f = dec === 3 ? String(r).padStart(3, "0") : String(Math.floor(r / 10)).padStart(2, "0");
-  return m > 0 ? `${m}:${String(s).padStart(2, "0")}.${f}` : `${s}.${f}`;
-}
-const formatSolve = (s, dec = 2) => s.penalty === "DNF" ? "DNF" : s.penalty === "+2" ? `${formatTime(getEffectiveMs(s), dec)}+` : formatTime(getEffectiveMs(s), dec);
-function calculateTrimmedAverage(list, size) {
-  if (list.length < size) return null;
-  const r = list.slice(-size).map(getEffectiveMs).sort((a, b) => (a === b ? 0 : a < b ? -1 : 1)).slice(1, size - 1);
-  return r.some((t) => t === Infinity) ? Infinity : r.reduce((a, t) => a + t, 0) / r.length;
-}
-function calculateSessionMean(list) { const v = list.map(getEffectiveMs).filter((t) => t !== Infinity); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : (list.length ? Infinity : null); }
-function calculateBest(list) { const v = list.map(getEffectiveMs).filter((t) => t !== Infinity); return v.length ? Math.min(...v) : (list.length ? Infinity : null); }
-const getCurrentEventSolves = () => solves.filter((s) => s.event === settings.event);
-function calculateMeanOfSlice(sl) { const t = sl.map(getEffectiveMs); return t.some((x) => x === Infinity) ? Infinity : t.reduce((a, b) => a + b, 0) / t.length; }
-function getBestRollingAvg(list, size, isMean = false) {
-  if (list.length < size) return null;
-  let best = Infinity;
-  for (let i = size; i <= list.length; i++) { const val = isMean ? calculateMeanOfSlice(list.slice(i - size, i)) : calculateTrimmedAverage(list.slice(i - size, i), size); if (val !== null && val < best) best = val; }
-  return best === Infinity ? null : best;
-}
-
-function checkAndCelebratePB(prevList, newSolve) {
-  const nt = getEffectiveMs(newSolve); if (nt === Infinity) return;
-  const full = [...prevList, newSolve], recs = [], pBest = calculateBest(prevList);
-  if (pBest !== null && pBest !== Infinity && nt < pBest) recs.push(`NEW SINGLE PB! (-${formatTime(pBest - nt, settings.decimals)}s)`);
-  [[5, "AO5"], [12, "AO12"], [50, "AO50"], [100, "AO100"]].forEach(([sz, lbl]) => {
-    if (full.length >= sz) { const cur = calculateTrimmedAverage(full, sz), pb = getBestRollingAvg(prevList, sz); if (cur !== null && cur !== Infinity && pb !== null && cur < pb) recs.push(`NEW BEST ${lbl}! (${formatTime(cur, settings.decimals)})`); }
-  });
-  if (!recs.length) return;
-  pbBanner.textContent = recs[0]; pbBanner.classList.remove("hidden"); clearTimeout(pbTimeoutId); pbTimeoutId = setTimeout(() => pbBanner.classList.add("hidden"), 4000);
-  const ctx2 = confettiCanvas.getContext("2d"); confettiCanvas.width = window.innerWidth; confettiCanvas.height = window.innerHeight;
-  const cols = [activeTheme.accentColor, activeTheme.textColor, activeTheme.readyColor, "#ffffff"], cx = confettiCanvas.width / 2, cy = confettiCanvas.height * 0.45;
-  const parts = Array.from({ length: 65 }, () => { const a = Math.random() * Math.PI * 2, sp = 3 + Math.random() * 8; return { x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 3, sz: 4 + Math.random() * 4, col: cols[Math.floor(Math.random() * cols.length)], a: 1, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.25 }; });
-  const step = () => {
-    ctx2.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height); let alive = false;
-    for (const p of parts) { p.x += p.vx; p.y += p.vy; p.vy += 0.22; p.r += p.vr; p.a -= 0.015; if (p.a > 0) { alive = true; ctx2.save(); ctx2.globalAlpha = p.a; ctx2.translate(p.x, p.y); ctx2.rotate(p.r); ctx2.fillStyle = p.col; ctx2.fillRect(-p.sz / 2, -p.sz / 2, p.sz, p.sz * 0.65); ctx2.restore(); } }
-    if (alive) requestAnimationFrame(step); else ctx2.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
-  };
-  requestAnimationFrame(step);
-}
-
-function renderSparkline(eventSolves) {
-  const indexed = eventSolves.map((s, idx) => ({ num: idx + 1, ms: getEffectiveMs(s), label: formatSolve(s, settings.decimals) })).filter((d) => d.ms !== Infinity);
-  const data = indexed.slice(-(settings.trendRange === "all" ? indexed.length : Number(settings.trendRange)));
-  if (data.length < 2) { sparklineWrap.innerHTML = `<span class="sparkline-empty">Complete 2+ solves for graph</span>`; return; }
-
-  let series;
-  if (settings.trendFlatten) {
-    const numSec = Math.min(4, data.length), bSize = data.length / numSec; series = [];
-    for (let b = 0; b < numSec; b++) {
-      const sI = Math.round(b * bSize), eI = Math.min(data.length, Math.round((b + 1) * bSize)), sl = data.slice(sI, Math.max(sI + 1, eI));
-      const avg = sl.reduce((a, x) => a + x.ms, 0) / sl.length;
-      series.push({ num: `Part ${b + 1} (#${sl[0].num}–${sl[sl.length - 1].num})`, plotMs: avg, label: `${formatTime(avg, settings.decimals)} avg` });
-    }
-  } else series = data.map((d) => ({ num: `#${d.num}`, plotMs: d.ms, label: d.label }));
-
-  const rMin = Math.min(...series.map((s) => s.plotMs)), rMax = Math.max(...series.map((s) => s.plotMs)), bSpan = Math.max(200, rMax - rMin);
-  const padMs = settings.trendFlatten ? Math.max(800, bSpan * 0.35) : 0, min = Math.max(0, rMin - padMs), max = rMax + padMs, span = Math.max(1, max - min);
-  const w = 260, h = 98, pad = 16, clampY = (ms) => Math.max(pad, Math.min(h - pad, h - pad - ((ms - min) / span) * (h - pad * 2)));
-  const coords = series.map((d, i) => ({ ...d, x: pad + (i / (series.length - 1)) * (w - pad * 2), y: clampY(d.plotMs) }));
-  const poly = coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
-
-  let trendLineSvg = "";
-  if (settings.trendFlatten && coords.length >= 3) {
-    const n = coords.length, sX = (n * (n - 1)) / 2, sXX = (n * (n - 1) * (2 * n - 1)) / 6, sY = coords.reduce((a, c) => a + c.plotMs, 0), sXY = coords.reduce((a, c, i) => a + i * c.plotMs, 0);
-    const slp = (n * sXX - sX * sX) ? (n * sXY - sX * sY) / (n * sXX - sX * sX) : 0, icp = (sY - slp * sX) / n;
-    trendLineSvg = `<line x1="${coords[0].x.toFixed(1)}" y1="${clampY(icp).toFixed(1)}" x2="${coords[n - 1].x.toFixed(1)}" y2="${clampY(icp + slp * (n - 1)).toFixed(1)}" stroke="currentColor" stroke-opacity="0.3" stroke-dasharray="4 3" stroke-width="1.4" />`;
-  }
-
-  const dotR = settings.trendFlatten ? 3.5 : (coords.length <= 40 ? 2.1 : 0), hitStep = Math.max(1, Math.floor(coords.length / 35));
-  const dots = coords.map((c, i) => `
-    ${dotR ? `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${dotR}" fill="currentColor" stroke="var(--card-bg-rgba)" stroke-width="1.2" opacity="0.95" />` : ""}
-    ${i % hitStep === 0 || i === coords.length - 1 ? `<circle class="spark-hit" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="10" fill="transparent" data-tip="${c.num} • ${c.label}" style="cursor:pointer;" />` : ""}
-  `).join("");
-
-  sparklineWrap.innerHTML = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="100%" style="color: var(--accent-color)">${settings.trendFlatten ? `<text x="6" y="11" fill="currentColor" opacity="0.45" font-size="8" font-family="monospace">${formatTime(rMax, 1)}</text><text x="6" y="${h - 3}" fill="currentColor" opacity="0.45" font-size="8" font-family="monospace">${formatTime(rMin, 1)}</text>` : ""}${trendLineSvg}<polyline fill="none" stroke="currentColor" stroke-width="${settings.trendFlatten ? 2.2 : 1.8}" stroke-opacity="0.95" stroke-linejoin="round" points="${poly}" />${dots}</svg>`;
-  sparklineWrap.querySelectorAll(".spark-hit").forEach((hit) => {
-    hit.addEventListener("pointerenter", (e) => showTooltip(hit.dataset.tip, e.clientX, e.clientY));
-    hit.addEventListener("pointermove", (e) => showTooltip(hit.dataset.tip, e.clientX, e.clientY));
-    hit.addEventListener("pointerleave", hideTooltip);
-  });
-}
-
-let advStatsViewMode = "all"; // "all" | "table" | "charts"
-
-function renderAdvancedStats(eventSolves) {
-  const dec = settings.decimals;
-  const validEntries = eventSolves
-    .map((s, i) => ({ idx: i + 1, ms: getEffectiveMs(s), createdAt: s.createdAt }))
-    .filter((d) => d.ms !== Infinity);
-  const valid = validEntries.map((d) => d.ms);
-  const dnfC = eventSolves.filter((s) => s.penalty === "DNF").length;
-  const p2C = eventSolves.filter((s) => s.penalty === "+2").length;
-
-  advStatsSubtitle.textContent = `${eventSolves.length} solves (${valid.length} valid, ${dnfC} DNF, ${p2C} +2)`;
-
-  if (valid.length < 2) {
-    advStatsBody.innerHTML = `<p class="muted-text">Complete at least 2 valid solves to unlock stats.</p>`;
-    return;
-  }
-
-  const mean = calculateSessionMean(eventSolves);
-  const best = calculateBest(eventSolves);
-  const worst = Math.max(...valid);
-  const stdDev = Math.sqrt(valid.reduce((acc, t) => acc + (t - mean) ** 2, 0) / valid.length);
-  const consistency = Math.max(0, 100 - (stdDev / mean) * 100);
-
-  // 1. Time Brackets
-  const allB = [
-    { label: "0–5s", min: 0, max: 5000 },
-    { label: "5–10s", min: 5000, max: 10000 },
-    { label: "10–15s", min: 10000, max: 15000 },
-    { label: "15–20s", min: 15000, max: 20000 },
-    { label: "20–25s", min: 20000, max: 25000 },
-    { label: "25–30s", min: 25000, max: 30000 },
-    { label: "30–45s", min: 30000, max: 45000 },
-    { label: "45s+", min: 45000, max: Infinity },
-  ].map((b) => {
-    const it = valid.filter((t) => t >= b.min && t < b.max);
-    return { ...b, count: it.length, avg: it.length ? it.reduce((a, x) => a + x, 0) / it.length : null };
-  });
-
-  const firstIdx = allB.findIndex((b) => b.count > 0);
-  const lastIdx = allB.length - 1 - [...allB].reverse().findIndex((b) => b.count > 0);
-  const activeB = allB.slice(Math.max(0, firstIdx), Math.min(allB.length, lastIdx + 1));
-  const maxB = Math.max(...activeB.map((b) => b.count), 1);
-  const bracketsHtml = activeB.map((b) => `
-    <div class="bracket-row chart-tip-target" data-tip="${b.label}: ${b.count} solves (${Math.round((b.count / valid.length) * 100)}%)${b.avg ? ` • Avg ${formatTime(b.avg, dec)}` : ""}">
-      <span>${b.label}</span>
-      <div class="bracket-track"><div class="bracket-fill" style="width:${Math.round((b.count / maxB) * 100)}%"></div></div>
-      <span class="bracket-val">${b.count} (${Math.round((b.count / valid.length) * 100)}%)</span>
-    </div>
-  `).join("");
-
-  // 2. Trajectory Chart
-  const trajW = 360, trajH = 142, tPadL = 36, tPadR = 10, tPadT = 12, tPadB = 20;
-  let rPB = Infinity;
-  const pbPts = [], rollPts = [], rWin = valid.length >= 12 ? 12 : 3;
-  for (let i = 0; i < valid.length; i++) {
-    if (valid[i] < rPB) rPB = valid[i];
-    pbPts.push(rPB);
-    const sl = valid.slice(Math.max(0, i - rWin + 1), i + 1);
-    rollPts.push(sl.reduce((a, b) => a + b, 0) / sl.length);
-  }
-  const n = valid.length, sX = (n * (n - 1)) / 2, sXX = (n * (n - 1) * (2 * n - 1)) / 6, sY = valid.reduce((a, b) => a + b, 0), sXY = valid.reduce((a, y, i) => a + i * y, 0);
-  const slp10 = ((n * sXX - sX * sX) ? (n * sXY - sX * sY) / (n * sXX - sX * sX) : 0) * 10;
-  const slopeText = slp10 <= -20 ? `↗ -${formatTime(Math.abs(slp10), 2)}s / 10` : slp10 >= 20 ? `↘ +${formatTime(slp10, 2)}s / 10` : "→ Steady";
-  
-  const tMin = Math.min(...pbPts, ...rollPts), tMax = Math.max(...pbPts, ...rollPts), tSpan = Math.max(1, tMax - tMin);
-  const tMid = (tMin + tMax) / 2; // <-- Defined here correctly
-  
-  const tx = (i) => tPadL + (i / (n - 1)) * (trajW - tPadL - tPadR);
-  const ty = (v) => tPadT + (1 - (v - tMin) / tSpan) * (trajH - tPadT - tPadB);
-
-  // 3. Hourly Performance
-  const hB = Array.from({ length: 24 }, (_, hr) => ({ hr, sum: 0, count: 0, best: Infinity }));
-  validEntries.forEach((e) => {
-    const hr = new Date(e.createdAt).getHours();
-    hB[hr].sum += e.ms; hB[hr].count++;
-    if (e.ms < hB[hr].best) hB[hr].best = e.ms;
-  });
-  const actH = hB.filter((h) => h.count > 0);
-  const maxHC = Math.max(...actH.map((h) => h.count), 1);
-  const fastH = [...actH].sort((a, b) => (a.sum / a.count) - (b.sum / b.count))[0];
-  const fmtHr = (hr) => hr === 0 ? "12a" : hr < 12 ? `${hr}a` : hr === 12 ? "12p" : `${hr - 12}p`;
-  const hourlyHtml = actH.map((h) => `
-    <div class="tod-col ${fastH && h.hr === fastH.hr ? "best" : ""} chart-tip-target" data-tip="${fmtHr(h.hr)}: ${h.count} solves • ${formatTime(h.sum / h.count, dec)} avg • Best ${formatTime(h.best, dec)}">
-      <span class="tod-time">${h.count}</span>
-      <div class="tod-bar-wrap"><div class="tod-bar" style="height:${Math.max(14, Math.round((h.count / maxHC) * 100))}%"></div></div>
-      <span class="tod-lbl">${fmtHr(h.hr)}</span>
-    </div>
-  `).join("");
-
-  // 4. Daily Pace Matrix
-  const dayMap = new Map();
-  validEntries.forEach((e) => {
-    const d = new Date(e.createdAt), k = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`, lbl = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    if (!dayMap.has(k)) dayMap.set(k, { label: lbl, times: [] });
-    dayMap.get(k).times.push(e.ms);
-  });
-  const days = [...dayMap.values()].slice(-12), dAvgs = days.map((d) => d.times.reduce((a, b) => a + b, 0) / d.times.length), minDA = Math.min(...dAvgs), maxDA = Math.max(...dAvgs);
-  const paceTilesHtml = days.map((d, idx) => {
-    const avg = dAvgs[idx], norm = maxDA > minDA ? 1 - (avg - minDA) / (maxDA - minDA) : 0.7;
-    return `<div class="pace-tile chart-tip-target" data-tip="${d.label}: ${d.times.length} solves • ${formatTime(avg, dec)} avg • Best ${formatTime(Math.min(...d.times), dec)}"><span class="pace-top">${d.label}</span><strong class="pace-main">${formatTime(avg, 2)}</strong><span class="pace-sub">${d.times.length}x</span><div class="pace-bar" style="width:${Math.round(25 + norm * 75)}%; opacity:${(0.35 + norm * 0.65).toFixed(2)}"></div></div>`;
-  }).join("");
-
-  // 5. Scatter Plot
-  const cSize = valid.length >= 40 ? 10 : valid.length >= 15 ? 5 : 2, chunks = [];
-  for (let i = 0; i + cSize <= valid.length; i += cSize) {
-    const sl = valid.slice(i, i + cSize), cm = sl.reduce((a, b) => a + b, 0) / sl.length, cs = Math.sqrt(sl.reduce((a, t) => a + (t - cm) ** 2, 0) / sl.length);
-    chunks.push({ label: `#${i + 1}–${i + cSize}`, mean: cm, sd: cs });
-  }
-  let scatterSvg = `<p class="muted-text">Need ${cSize * 2}+ solves for scatter plot</p>`;
-  if (chunks.length >= 2) {
-    const sw = 260, sh = 142, sL = 32, sR = 10, sT = 12, sB = 22;
-    const minM = Math.min(...chunks.map((c) => c.mean)), maxM = Math.max(...chunks.map((c) => c.mean)), minS = Math.min(...chunks.map((c) => c.sd)), maxS = Math.max(...chunks.map((c) => c.sd));
-    const spM = Math.max(1, maxM - minM), spS = Math.max(1, maxS - minS);
-    const sx = (m) => sL + ((m - minM) / spM) * (sw - sL - sR), sy = (s) => sh - sB - ((s - minS) / spS) * (sh - sT - sB);
-    const avgCM = chunks.reduce((a, c) => a + c.mean, 0) / chunks.length, avgCS = chunks.reduce((a, c) => a + c.sd, 0) / chunks.length;
-    const dots = chunks.map((c, idx) => `<circle class="chart-tip-target" cx="${sx(c.mean).toFixed(1)}" cy="${sy(c.sd).toFixed(1)}" r="${idx === chunks.length - 1 ? 4.8 : 3.2}" fill="var(--accent-color)" opacity="${(0.3 + (idx / (chunks.length - 1)) * 0.7).toFixed(2)}" stroke="${idx === chunks.length - 1 ? "#fff" : "none"}" stroke-width="1.2" data-tip="${c.label}: ${formatTime(c.mean, dec)} avg • σ ${formatTime(c.sd, dec)}s" style="cursor:pointer"/>`).join("");
-    scatterSvg = `<svg viewBox="0 0 ${sw} ${sh}" width="100%" height="134"><line x1="${sL}" y1="${sy(avgCS).toFixed(1)}" x2="${sw - sR}" y2="${sy(avgCS).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/><line x1="${sx(avgCM).toFixed(1)}" y1="${sT}" x2="${sx(avgCM).toFixed(1)}" y2="${sh - sB}" stroke="var(--border-color)" stroke-dasharray="3 3"/><line x1="${sL}" y1="${sh - sB}" x2="${sw - sR}" y2="${sh - sB}" stroke="var(--border-strong)"/><line x1="${sL}" y1="${sT}" x2="${sL}" y2="${sh - sB}" stroke="var(--border-strong)"/><text x="4" y="${sT + 6}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(maxS, 1)}σ</text><text x="4" y="${sh - sB}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(minS, 1)}σ</text><text x="${sL}" y="${sh - 6}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(minM, 1)}s</text><text x="${sw - sR - 26}" y="${sh - 6}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(maxM, 1)}s</text><text x="${sL + 4}" y="${sT + 8}" fill="var(--accent-color)" opacity="0.65" font-size="7" font-family="monospace">← Fast &amp; Steady</text>${dots}</svg>`;
-  }
-
-  // 6. Comprehensive Records Table
-  const sorted = [...valid].sort((a, b) => a - b);
-  const median = sorted[Math.floor(sorted.length / 2)];
-  const iqr = sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.75)] - sorted[Math.floor(sorted.length * 0.25)] : null;
-  const subCount = valid.filter((t) => t <= settings.goalMs).length;
-  let curSt = 0, bestSt = 0;
-  eventSolves.forEach((s) => { if (getEffectiveMs(s) <= settings.goalMs) { curSt++; if (curSt > bestSt) bestSt = curSt; } else curSt = 0; });
-  const fmt = (v) => (v === null ? "-" : formatTime(v, dec));
-  const mo3 = eventSolves.length >= 3 ? calculateMeanOfSlice(eventSolves.slice(-3)) : null;
-
-  const rows = [
-    ["Single (PB)", formatSolve(eventSolves.slice(-1)[0], dec), fmt(best), `Worst: ${fmt(worst)} • Spread: ${formatTime(worst - best, dec)}`],
-    ["Mean of 3 (Mo3)", fmt(mo3), fmt(getBestRollingAvg(eventSolves, 3, true)), `Median: ${fmt(median)}`],
-    ["Average of 5 (Ao5)", fmt(calculateTrimmedAverage(eventSolves, 5)), fmt(getBestRollingAvg(eventSolves, 5)), `Sub-${formatTime(settings.goalMs, 2)}: ${Math.round((subCount / valid.length) * 100)}% (${subCount}/${valid.length})`],
-    ["Average of 12 (Ao12)", fmt(calculateTrimmedAverage(eventSolves, 12)), fmt(getBestRollingAvg(eventSolves, 12)), `Goal Streak: ${bestSt} solves (current ${curSt})`],
-    ["Ao25 / Ao50", `${fmt(calculateTrimmedAverage(eventSolves, 25))} / ${fmt(calculateTrimmedAverage(eventSolves, 50))}`, `${fmt(getBestRollingAvg(eventSolves, 25))} / ${fmt(getBestRollingAvg(eventSolves, 50))}`, `Std Dev (σ): ${formatTime(stdDev, dec)}s`],
-    ["Average of 100 (Ao100)", fmt(calculateTrimmedAverage(eventSolves, 100)), fmt(getBestRollingAvg(eventSolves, 100)), `Consistency: ${consistency.toFixed(1)}% • IQR: ${iqr ? formatTime(iqr, dec) + "s" : "-"}`],
-    ["Session Overall", fmt(mean), fmt(best), `Total Time: ${Math.floor(valid.reduce((a, b) => a + b, 0) / 60000)}m • Valid: ${valid.length}`],
-  ];
-
-  const jumpHtml = `
-    <div style="display:flex; justify-content:space-between; align-items:center; padding:0.2rem 0.25rem;">
-      <span class="muted-text" style="font-size:0.75rem;">Showing charts &amp; records</span>
-      <button id="jump-to-table-btn" class="btn-text" type="button" style="color:var(--accent-color); font-weight:700; font-size:0.76rem;">↓ Jump to Records Table</button>
-    </div>
-  `;
-
-  const chartsHtml = `
-    <div class="charts-grid-2">
-      <div class="chart-card"><div class="chart-title-row"><span>Time Brackets</span><small>${valid.length} valid</small></div><div class="bracket-list">${bracketsHtml}</div></div>
-      <div class="chart-card"><div class="chart-title-row"><span>Improvement Trajectory</span><small>${slopeText}</small></div><svg viewBox="0 0 ${trajW} ${trajH}" width="100%" height="134" style="color:var(--accent-color)"><line x1="${tPadL}" y1="${ty(tMax).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMax).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/><line x1="${tPadL}" y1="${ty(tMid).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMid).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/><line x1="${tPadL}" y1="${ty(tMin).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMin).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/><polyline fill="none" stroke="currentColor" stroke-opacity="0.35" stroke-dasharray="4 3" stroke-width="1.4" points="${pbPts.map((v, i) => `${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ")}" /><polyline fill="none" stroke="currentColor" stroke-width="2" points="${rollPts.map((v, i) => `${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ")}" /><text x="2" y="${ty(tMax) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMax, 1)}</text><text x="2" y="${ty(tMid) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMid, 1)}</text><text x="2" y="${ty(tMin) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMin, 1)}</text><text x="${tPadL}" y="${trajH - 4}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">#${validEntries[0].idx}</text><text x="${trajW - tPadR - 24}" y="${trajH - 4}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">#${validEntries[n - 1].idx}</text></svg><small class="muted-text" style="font-size:0.7rem;">Solid = Rolling Ao${rWin} • Dashed = Single PB Staircase</small></div>
-    </div>
-    <div class="charts-grid-3">
-      <div class="chart-card"><div class="chart-title-row"><span>Hourly Volume &amp; Speed</span><small>Fastest: ${fastH ? `${fmtHr(fastH.hr)} (${formatTime(fastH.sum / fastH.count, 2)})` : "-"}</small></div><div class="tod-grid" style="grid-template-columns: repeat(${actH.length}, minmax(24px, 1fr))">${hourlyHtml}</div></div>
-      <div class="chart-card"><div class="chart-title-row"><span>Daily Pace Matrix</span><small>Last 12 active days</small></div><div class="pace-grid">${paceTilesHtml}</div></div>
-      <div class="chart-card"><div class="chart-title-row"><span>Speed vs Consistency</span><small>${cSize}-solve blocks</small></div>${scatterSvg}</div>
-    </div>
-  `;
-
-  const tableHtml = `
-    <div id="stats-records-table-card" class="records-table-wrap">
-      <div class="panel-header" style="padding:0.75rem 1rem; border-bottom:1px solid var(--border-color);">
-        <span>Session Records &amp; Rolling Averages</span>
-        <span class="muted-text">${valid.length} solves calculated</span>
-      </div>
-      <table class="records-table">
-        <thead><tr><th>Metric</th><th>Current</th><th>Best Ever</th><th>Details</th></tr></thead>
-        <tbody>${rows.map(([m, c, b, note]) => `<tr><td><strong>${m}</strong></td><td class="num">${c}</td><td class="num">${b}</td><td style="color:var(--text-secondary)">${note}</td></tr>`).join("")}</tbody>
-      </table>
-    </div>
-  `;
-
-  if (advStatsViewMode === "table") {
-    advStatsBody.innerHTML = tableHtml;
-  } else if (advStatsViewMode === "charts") {
-    advStatsBody.innerHTML = chartsHtml;
-  } else {
-    advStatsBody.innerHTML = jumpHtml + chartsHtml + tableHtml;
-  }
-
-  $("jump-to-table-btn")?.addEventListener("click", () => {
-    $("stats-records-table-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-
-  const tabWrap = $("adv-view-tabs");
-  if (tabWrap) {
-    tabWrap.querySelectorAll(".seg-btn").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.sview === advStatsViewMode);
-      btn.onclick = () => {
-        advStatsViewMode = btn.dataset.sview;
-        renderAdvancedStats(eventSolves);
-      };
-    });
-  }
-
-  advStatsBody.querySelectorAll(".chart-tip-target").forEach((el) => {
-    el.addEventListener("pointerenter", (e) => {
-      advChartTooltip.textContent = el.dataset.tip;
-      advChartTooltip.classList.remove("hidden");
-      advChartTooltip.style.left = `${e.clientX}px`;
-      advChartTooltip.style.top = `${e.clientY}px`;
-    });
-    el.addEventListener("pointermove", (e) => {
-      advChartTooltip.style.left = `${e.clientX}px`;
-      advChartTooltip.style.top = `${e.clientY}px`;
-    });
-    el.addEventListener("pointerleave", () => advChartTooltip.classList.add("hidden"));
-  });
-}
-
-function renderGoal(ao5) {
-  goalTargetLabel.textContent = `Target: Sub-${formatTime(settings.goalMs, 2)}`;
-  if (ao5 === null) { goalCurrentLabel.textContent = "Ao5: -"; goalFill.style.width = "0%"; return; }
-  if (ao5 === Infinity) { goalCurrentLabel.textContent = "Ao5: DNF"; goalFill.style.width = "10%"; return; }
-  goalCurrentLabel.textContent = `Ao5: ${formatTime(ao5, settings.decimals)}`;
-  goalFill.style.width = `${Math.min(100, Math.max(12, Math.round((settings.goalMs / ao5) * 100)))}%`;
-}
-
-function renderAll() {
-  const eventSolves = getCurrentEventSolves(), dec = settings.decimals;
-  const best = calculateBest(eventSolves), ao5 = calculateTrimmedAverage(eventSolves, 5), ao12 = calculateTrimmedAverage(eventSolves, 12), mean = calculateSessionMean(eventSolves);
-  statBestEl.textContent = best === null ? "-" : formatTime(best, dec); statAo5El.textContent = ao5 === null ? "-" : formatTime(ao5, dec);
-  statAo12El.textContent = ao12 === null ? "-" : formatTime(ao12, dec); statMeanEl.textContent = mean === null ? "-" : formatTime(mean, dec);
-  statCountEl.textContent = String(eventSolves.length);
-  topbarEventPill.textContent = EVENT_TO_PUZZLE[settings.event] || settings.event.toUpperCase();
-  topbarAo5Pill.textContent = ao5 === null ? "Ao5: -" : `Ao5: ${formatTime(ao5, dec)}`;
-
-  renderSparkline(eventSolves); renderGoal(ao5);
-  const vMs = eventSolves.map(getEffectiveMs).filter((t) => t !== Infinity);
-  advStatsTeaser.textContent = (vMs.length >= 2 && mean !== null && mean !== Infinity) ? `• σ ${formatTime(Math.sqrt(vMs.reduce((a, t) => a + (t - mean) ** 2, 0) / vMs.length), dec)}s` : "";
-  if (advStatsOpen) renderAdvancedStats(eventSolves);
-
-  const latest = eventSolves[eventSolves.length - 1];
-  if (latest && !["running", "holding", "ready", "inspecting"].includes(timerState)) {
-    lastSolveActions.classList.remove("hidden"); lastPlus2Btn.classList.toggle("active", latest.penalty === "+2"); lastDnfBtn.classList.toggle("active", latest.penalty === "DNF");
-    if (timerState === "idle") timerDisplay.textContent = formatSolve(latest, dec);
-  } else {
-    lastSolveActions.classList.add("hidden"); if (timerState === "idle") timerDisplay.textContent = formatTime(0, dec);
-  }
-
-  const startIdx = showAllSolvesInList ? 0 : Math.max(0, eventSolves.length - 100), htmlRows = [];
-  for (let i = eventSolves.length - 1; i >= startIdx; i--) {
-    const s = eventSolves[i];
-    htmlRows.push(`<li class="solve-item" data-id="${s.id}"><span class="solve-index">${i + 1}.</span><span class="solve-time">${formatSolve(s, dec)}</span><div class="solve-item-actions"><button class="mini-btn ${s.penalty === "+2" ? "active" : ""}" data-act="+2" type="button">+2</button><button class="mini-btn ${s.penalty === "DNF" ? "active" : ""}" data-act="DNF" type="button">DNF</button><button class="mini-btn" data-act="del" type="button">×</button></div></li>`);
-  }
-  if (startIdx > 0) htmlRows.push(`<button id="show-all-btn" class="btn-text full-width" style="padding:0.5rem 0;" type="button">Load all ${eventSolves.length} solves</button>`);
-  solveListEl.innerHTML = htmlRows.join("");
-  if (activeTab === "improvement") renderImprovementView();
-}
-
-solveListEl.addEventListener("click", (e) => {
-  if (e.target.id === "show-all-btn") { showAllSolvesInList = true; renderAll(); return; }
-  const li = e.target.closest("li[data-id]"); if (!li) return;
-  const id = li.dataset.id, btn = e.target.closest("button[data-act]");
-  if (btn) { e.stopPropagation(); if (btn.dataset.act === "+2") togglePenalty(id, "+2"); if (btn.dataset.act === "DNF") togglePenalty(id, "DNF"); if (btn.dataset.act === "del") deleteSolve(id); return; }
-  openSolveModal(id);
-});
-
-advStatsToggle.addEventListener("click", () => {
-  advStatsToggle.blur();
-  advStatsOpen = !advStatsOpen;
-  if (advStatsOpen) renderAdvancedStats(getCurrentEventSolves());
-  advStatsDrawer.classList.toggle("hidden", !advStatsOpen);
-});
-
-closeAdvStatsBtn.addEventListener("click", () => {
-  advStatsOpen = false;
-  advStatsDrawer.classList.add("hidden");
-});
-
-$("adv-stats-drawer")?.addEventListener("pointerdown", (e) => e.stopPropagation());
-$("adv-stats-drawer")?.addEventListener("wheel", (e) => e.stopPropagation(), { passive: true });
-
-// === SECTION A7: NAVIGATION, IMPORT/EXPORT, SETTINGS & PROFILE ===
+// === SECTION A6: NAVIGATION, IMPORT/EXPORT, SETTINGS & PROFILE ===
 navTabs.forEach((btn) => btn.addEventListener("click", () => { if (timerState !== "running") { switchTab(btn.dataset.tab); btn.blur(); } }));
 function togglePenalty(id, type) { const s = solves.find((x) => x.id === id); if (!s) return; s.penalty = s.penalty === type ? null : type; saveSolves(); renderAll(); if (selectedSolveId === id) openSolveModal(id); }
 function deleteSolve(id) { solves = solves.filter((x) => x.id !== id); saveSolves(); if (selectedSolveId === id) closeModals(); renderAll(); }
@@ -1078,7 +661,8 @@ function applySettingsToUI() {
   $("setting-timer-size").value = settings.timerSize; $("timer-size-value").textContent = `${settings.timerSize}rem`;
   $("setting-scramble-size").value = settings.scrambleSize; $("scramble-size-value").textContent = `${settings.scrambleSize}rem`;
   $("setting-sidebar-width").value = settings.sidebarWidth; $("sidebar-width-value").textContent = `${settings.sidebarWidth}px`;
-  $("profile-name-label").textContent = settings.profileName; $("profile-avatar").textContent = (settings.profileName[0] || "C").toUpperCase();
+  $("profile-name-label").textContent = settings.profileName;
+  $("profile-avatar").textContent = (settings.profileName[0] || "C").toUpperCase();
   if (timerState === "idle") timerHintText.textContent = settings.inspection ? "Tap SPACE or CLICK to inspect (15s)" : "Hold SPACE or CLICK to ready";
 }
 
@@ -1094,16 +678,15 @@ $("setting-scramble-size").addEventListener("input", () => updateSetting("scramb
 $("setting-sidebar-width").addEventListener("input", () => updateSetting("sidebarWidth", Number($("setting-sidebar-width").value)));
 
 function pushAllToCloud() {
-  scheduleCloudPush(() => ({
-    solves,
-    settings,
-    theme: activeTheme,
-    algReps: JSON.parse(localStorage.getItem("algtimer_alg_reps_v1") || "{}"),
-  }));
+  scheduleCloudPush(() => ({ solves, settings, theme: activeTheme, algReps: JSON.parse(localStorage.getItem(STORAGE_ALG_REPS_KEY) || "{}") }));
 }
 function saveSolves() { localStorage.setItem(STORAGE_SOLVES_KEY, JSON.stringify(solves)); pushAllToCloud(); }
 function saveSettings() { localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(settings)); pushAllToCloud(); }
 function loadArray(k) { try { const p = JSON.parse(localStorage.getItem(k)); return Array.isArray(p) ? p : []; } catch { return []; } }
 function loadJSON(k, fb, merge = false) { try { const p = JSON.parse(localStorage.getItem(k)); return p && typeof p === "object" && !Array.isArray(p) ? (merge ? { ...fb, ...p } : p) : fb; } catch { return fb; } }
+
+// Isolate Adv Stats drawer from timer surface clicks/scrolls
+$("adv-stats-drawer")?.addEventListener("pointerdown", (e) => e.stopPropagation());
+$("adv-stats-drawer")?.addEventListener("wheel", (e) => e.stopPropagation(), { passive: true });
 
 init();
