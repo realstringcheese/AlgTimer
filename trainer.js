@@ -1,4 +1,4 @@
-Import { METHOD_GUIDES, METHOD_ALGS } from "./data.js";
+import { METHOD_GUIDES, METHOD_ALGS } from "./data.js";
 
 export const PLL_CASES = [
   { id: "pll-aa", name: "Aa-Perm", cat: "PLL", stickering: "PLL", alg: "R' F R' B2 R F' R' B2 R2", tip: "Headlights in back, 2x2 block in front-left." },
