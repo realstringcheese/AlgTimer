@@ -8,6 +8,11 @@ function formatTime(ms, decimals = 2) {
   return seconds.toFixed(decimals);
 }
 
+function getEffectiveMs(solve) {
+  if (!solve || solve.dnf) return Infinity;
+  return solve.ms + (solve.plus2 ? 2000 : 0);
+}
+
 // === SECTION A1: STORAGE KEYS & DEFAULTS ===
 let randomScrambleForEvent = null;
 const STORAGE_SOLVES_KEY = "algtimer_solves_v1";
