@@ -205,19 +205,42 @@
         <div class="page-header">
           <div>
             <h1 id="alg-page-title" class="page-title">Alg Learner (CFOP)</h1>
-            <p class="page-subtitle">Synced with your profile method. Click any algorithm to step through it in 3D.</p>
+            <p class="page-subtitle">Synced with your profile method. Click any algorithm to play or step through it.</p>
           </div>
-          <div id="alg-filter-pills" class="filter-pills"></div>
+          <div class="alg-toolbar">
+            <input id="alg-search-input" class="input-text alg-search" type="search" placeholder="Search algs, moves, tips..." aria-label="Search algorithms" />
+            <div id="alg-filter-pills" class="filter-pills"></div>
+          </div>
         </div>
+
         <div class="alg-workspace">
           <div class="alg-simulator">
-            <div class="panel-header"><span id="alg-sim-title">Select an Algorithm</span><span id="alg-sim-cat" class="alg-tag">PLL</span></div>
-            <div class="alg-sim-player">
-              <twisty-player id="alg-player" puzzle="3x3x3" visualization="3D" background="none" experimental-setup-anchor="end" experimental-stickering="PLL" alg="R U R' U' R' F R2 U' R' U' R U R' F'"></twisty-player>
+            <div class="panel-header">
+              <span id="alg-sim-title">Select an Algorithm</span>
+              <div style="display:flex; align-items:center; gap:0.4rem;">
+                <button id="alg-view-mode-btn" class="btn-mini-pill" type="button" title="Switch between 3D Video and Step-by-Step Isometric Cube">3D Video</button>
+                <span id="alg-sim-cat" class="alg-tag">PLL</span>
+              </div>
             </div>
-            <p id="alg-sim-moves" class="alg-moves"></p>
+
+            <div id="alg-sim-player" class="alg-sim-player"></div>
+
+            <div class="alg-player-controls">
+              <button id="alg-reset-btn" class="btn-outline" type="button" title="Reset to start">↺</button>
+              <button id="alg-prev-btn" class="btn-outline" type="button" title="Step back">◀</button>
+              <button id="alg-play-btn" class="btn-primary" type="button" style="flex:1;">▶ Play</button>
+              <button id="alg-next-btn" class="btn-outline" type="button" title="Step forward">▶</button>
+              <select id="alg-speed-select" class="select-mini" aria-label="Playback Speed">
+                <option value="0.5">0.5x</option>
+                <option value="1" selected>1x</option>
+                <option value="1.5">1.5x</option>
+              </select>
+            </div>
+
+            <div id="alg-sim-moves" class="alg-moves-bar"></div>
             <p id="alg-sim-tip" class="alg-tip"></p>
           </div>
+
           <div id="alg-grid" class="alg-grid"></div>
         </div>
       </div>

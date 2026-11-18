@@ -854,3 +854,72 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance
   .alg-workspace, .stage-grid { grid-template-columns: 1fr; }
   .alg-simulator { position: static; }
 }
+
+/* === ALG LEARNER TOOLBAR, CASE DIAGRAMS & PLAYBACK === */
+.alg-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.alg-search {
+  width: 220px;
+  padding: 0.36rem 0.7rem;
+  font-size: 0.8rem;
+  font-family: var(--font-ui);
+}
+
+.alg-player-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.alg-player-controls .btn-outline,
+.alg-player-controls .btn-primary {
+  padding: 0.38rem 0.65rem;
+  font-size: 0.78rem;
+}
+
+.alg-moves-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.move-chip {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 0.16rem 0.38rem;
+  cursor: pointer;
+}
+.move-chip:hover { color: var(--text-primary); border-color: var(--border-strong); }
+.move-chip.done { color: var(--text-primary); opacity: 0.65; }
+.move-chip.current {
+  background: var(--accent-color);
+  color: var(--accent-contrast);
+  font-weight: 700;
+}
+
+.alg-card-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.55rem;
+  height: 112px;
+}
+.alg-card-visual svg {
+  max-width: 100%;
+  max-height: 100%;
+}

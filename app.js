@@ -1614,7 +1614,114 @@ closeAdvStatsBtn.addEventListener("click", () => {
   advStatsDrawer.classList.add("hidden");
 });
 
-// === SECTION A9: METHOD-SYNCED GUIDES & ALG LEARNER ===
+// === SECTION A9: METHOD-SYNCED GUIDES, CUBE ENGINE & ALG LEARNER ===
+const CUBE_FACES = ["U", "R", "F", "D", "L", "B"];
+const CUBE_OFF = { U: 0, R: 9, F: 18, D: 27, L: 36, B: 45 };
+const STICKER_HEX = { U: "#facc15", R: "#ef4444", F: "#22c55e", D: "#f8fafc", L: "#f97316", B: "#3b82f6" };
+
+let algSearchQuery = "";
+let algStepIndex = 0;
+let algIsPlaying = false;
+let algPlayTimer = null;
+let algViewMode = "webgl"; // "webgl" | "step"
+let activeAlgTwisty = null;
+let currentAlgItem = null;
+
+function createSolvedCube() {
+  return CUBE_FACES.flatMap((f) => Array(9).fill(f));
+}
+function rotFaceCW(c, f) {
+  const o = CUBE_OFF[f], s = c.slice(o, o + 9);
+  const cw = [s[6], s[3], s[0], s[7], s[4], s[1], s[8], s[5], s[2]];
+  for (let i = 0; i < 9; i++) c[o + i] = cw[i];
+}
+function cycle4(c, a, b, d, e) {
+  for (let i = 0; i < 3; i++) {
+    const tmp = c[e[i]];
+    c[e[i]] = c[d[i]]; c[d[i]] = c[b[i]]; c[b[i]] = c[a[i]]; c[a[i]] = tmp;
+  }
+}
+function moveCubeCW(c, m) {
+  const O = CUBE_OFF;
+  if (m === "U") { rotFaceCW(c, "U"); cycle4(c, [O.F, O.F+1, O.F+2], [O.L, O.L+1, O.L+2], [O.B, O.B+1, O.B+2], [O.R, O.R+1, O.R+2]); }
+  else if (m === "D") { rotFaceCW(c, "D"); cycle4(c, [O.F+6, O.F+7, O.F+8], [O.R+6, O.R+7, O.R+8], [O.B+6, O.B+7, O.B+8], [O.L+6, O.L+7, O.L+8]); }
+  else if (m === "R") { rotFaceCW(c, "R"); cycle4(c, [O.F+2, O.F+5, O.F+8], [O.U+2, O.U+5, O.U+8], [O.B+6, O.B+3, O.B], [O.D+2, O.D+5, O.D+8]); }
+  else if (m === "L") { rotFaceCW(c, "L"); cycle4(c, [O.U, O.U+3, O.U+6], [O.F, O.F+3, O.F+6], [O.D, O.D+3, O.D+6], [O.B+8, O.B+5, O.B+2]); }
+  else if (m === "F") { rotFaceCW(c, "F"); cycle4(c, [O.U+6, O.U+7, O.U+8], [O.R, O.R+3, O.R+6], [O.D+2, O.D+1, O.D], [O.L+8, O.L+5, O.L+2]); }
+  else if (m === "B") { rotFaceCW(c, "B"); cycle4(c, [O.U+2, O.U+1, O.U], [O.L, O.L+3, O.L+6], [O.D+6, O.D+7, O.D+8], [O.R+8, O.R+5, O.R+2]); }
+  else if (m === "M") { cycle4(c, [O.U+1, O.U+4, O.U+7], [O.F+1, O.F+4, O.F+7], [O.D+1, O.D+4, O.D+7], [O.B+7, O.B+4, O.B+1]); }
+  else if (m === "E") { cycle4(c, [O.F+3, O.F+4, O.F+5], [O.R+3, O.R+4, O.R+5], [O.B+3, O.B+4, O.B+5], [O.L+3, O.L+4, O.L+5]); }
+  else if (m === "S") { cycle4(c, [O.U+3, O.U+4, O.U+5], [O.R+1, O.R+4, O.R+7], [O.D+5, O.D+4, O.D+3], [O.L+7, O.L+4, O.L+1]); }
+}
+function applyCubeToken(c, tok) {
+  if (!tok) return;
+  let base = tok[0], mod = tok.slice(1);
+  if (mod.startsWith("w")) { base = base.toLowerCase(); mod = mod.slice(1); }
+  const turns = mod.includes("2") ? 2 : mod.includes("'") ? 3 : 1;
+  const wide = { r: ["R", "M", 3], l: ["L", "M", 1], u: ["U", "E", 3], d: ["D", "E", 1], f: ["F", "S", 1], b: ["B", "S", 3] };
+  for (let t = 0; t < turns; t++) {
+    if ("UDRLFBMES".includes(base)) moveCubeCW(c, base);
+    else if (wide[base]) {
+      const [f, sl, st] = wide[base];
+      moveCubeCW(c, f);
+      for (let k = 0; k < st; k++) moveCubeCW(c, sl);
+    }
+  }
+}
+function invertAlgTokens(alg) {
+  return alg.trim().split(/\s+/).filter(Boolean).reverse().map((t) =>
+    t.endsWith("2") ? t : t.endsWith("'") ? t.slice(0, -1) : `${t}'`
+  );
+}
+function getCubeAtStep(alg, stepIdx) {
+  const toks = alg.trim().split(/\s+/).filter(Boolean);
+  const c = createSolvedCube();
+  invertAlgTokens(alg).forEach((t) => applyCubeToken(c, t));
+  for (let i = 0; i < Math.min(stepIdx, toks.length); i++) applyCubeToken(c, toks[i]);
+  return c;
+}
+
+function renderTopDownLLSVG(cube, stickering) {
+  const isOLL = stickering === "OLL" || stickering === "CMLL" || stickering === "COLL";
+  const uCol = (f) => (isOLL ? (f === "U" ? STICKER_HEX.U : "#333740") : STICKER_HEX[f]);
+  const sCol = (f) => (isOLL ? (f === "U" ? STICKER_HEX.U : "#2a2d35") : STICKER_HEX[f]);
+  let out = `<svg viewBox="0 0 112 112" width="100%" height="100%">`;
+  for (let r = 0; r < 3; r++) for (let col = 0; col < 3; col++) {
+    out += `<rect x="${20 + col * 24}" y="${20 + r * 24}" width="22" height="22" rx="3" fill="${uCol(cube[r * 3 + col])}" stroke="#111" stroke-width="1.5"/>`;
+  }
+  const O = CUBE_OFF;
+  [O.B + 2, O.B + 1, O.B].forEach((idx, col) => { out += `<rect x="${20 + col * 24}" y="9" width="22" height="8" rx="2" fill="${sCol(cube[idx])}" stroke="#111" stroke-width="1.2"/>`; });
+  [O.F, O.F + 1, O.F + 2].forEach((idx, col) => { out += `<rect x="${20 + col * 24}" y="95" width="22" height="8" rx="2" fill="${sCol(cube[idx])}" stroke="#111" stroke-width="1.2"/>`; });
+  [O.L, O.L + 1, O.L + 2].forEach((idx, r) => { out += `<rect x="9" y="${20 + r * 24}" width="8" height="22" rx="2" fill="${sCol(cube[idx])}" stroke="#111" stroke-width="1.2"/>`; });
+  [O.R + 2, O.R + 1, O.R].forEach((idx, r) => { out += `<rect x="95" y="${20 + r * 24}" width="8" height="22" rx="2" fill="${sCol(cube[idx])}" stroke="#111" stroke-width="1.2"/>`; });
+  return `${out}</svg>`;
+}
+
+function renderIsoCubeSVG(cube, size = 24, cx = 100, cy = 88, vb = "0 0 200 176") {
+  const ux = [-0.866 * size, -0.5 * size], vx = [0.866 * size, -0.5 * size], dn = [0, size];
+  const pt = (a, b, d) => `${(cx + a * ux[0] + b * vx[0] + d * dn[0]).toFixed(1)},${(cy + a * ux[1] + b * vx[1] + d * dn[1]).toFixed(1)}`;
+  const poly = (pts, fill) => `<polygon points="${pts.join(" ")}" fill="${fill}" stroke="#111" stroke-width="2" stroke-linejoin="round"/>`;
+  const O = CUBE_OFF;
+  let out = `<svg viewBox="${vb}" width="100%" height="100%">`;
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+    out += poly([pt(2 - c, 2 - r, 0), pt(3 - c, 2 - r, 0), pt(3 - c, 3 - r, 0), pt(2 - c, 3 - r, 0)], STICKER_HEX[cube[O.U + r * 3 + c]]);
+  }
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+    out += poly([pt(2 - c, 0, r), pt(3 - c, 0, r), pt(3 - c, 0, r + 1), pt(2 - c, 0, r + 1)], STICKER_HEX[cube[O.F + r * 3 + c]]);
+  }
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+    out += poly([pt(0, c, r), pt(0, c + 1, r), pt(0, c + 1, r + 1), pt(0, c, r + 1)], STICKER_HEX[cube[O.R + r * 3 + c]]);
+  }
+  return `${out}</svg>`;
+}
+
+function renderAlgCaseVisual(item) {
+  const cube = getCubeAtStep(item.alg, 0);
+  const topDownCats = ["PLL", "OLL", "CMLL", "OCLL / COLL", "EPLL", "Last Layer"];
+  if (topDownCats.includes(item.cat)) return renderTopDownLLSVG(cube, item.stickering);
+  return renderIsoCubeSVG(cube, 23, 100, 86, "0 0 200 172");
+}
+
 function syncMethodViews() {
   const method = METHOD_GUIDES[settings.profileMethod] ? settings.profileMethod : "CFOP";
   guideNavTab.textContent = `${method} Guide`;
@@ -1623,6 +1730,9 @@ function syncMethodViews() {
   const algs = METHOD_ALGS[method] || METHOD_ALGS.CFOP;
   const cats = ["ALL", ...new Set(algs.map((a) => a.cat))];
   activeAlgFilter = "ALL";
+  algSearchQuery = "";
+  const searchInput = $("alg-search-input");
+  if (searchInput) searchInput.value = "";
   selectedAlgId = algs[0]?.id;
 
   algFilterPills.innerHTML = cats.map((c, idx) =>
@@ -1638,8 +1748,18 @@ function syncMethodViews() {
 function renderAlgs() {
   const method = METHOD_ALGS[settings.profileMethod] ? settings.profileMethod : "CFOP";
   const list = METHOD_ALGS[method];
-  const filtered = activeAlgFilter === "ALL" ? list : list.filter((a) => a.cat === activeAlgFilter);
+  const q = algSearchQuery.trim().toLowerCase();
+  const filtered = list.filter((a) => {
+    const catOk = activeAlgFilter === "ALL" || a.cat === activeAlgFilter;
+    const searchOk = !q || a.name.toLowerCase().includes(q) || a.cat.toLowerCase().includes(q) || a.alg.toLowerCase().includes(q) || a.tip.toLowerCase().includes(q);
+    return catOk && searchOk;
+  });
+
   algGrid.innerHTML = "";
+  if (filtered.length === 0) {
+    algGrid.innerHTML = `<p class="muted-text">No algorithms match "${algSearchQuery}".</p>`;
+    return;
+  }
 
   filtered.forEach((item) => {
     const isLearned = learnedAlgs.includes(item.id);
@@ -1648,9 +1768,10 @@ function renderAlgs() {
     card.innerHTML = `
       <div class="alg-card-top"><span class="alg-name">${item.name}</span><span class="alg-tag">${item.cat}</span></div>
       <div class="alg-moves">${item.alg}</div>
+      <div class="alg-card-visual">${renderAlgCaseVisual(item)}</div>
       <p class="alg-tip">${item.tip}</p>
       <div class="alg-card-footer">
-        <button class="btn-outline" data-act="play" type="button">Preview 3D</button>
+        <button class="btn-outline" data-act="play" type="button">Load Player</button>
         <button class="btn-pill ${isLearned ? "active" : ""}" data-act="learn" type="button">${isLearned ? "✓ Learned" : "Mark Learned"}</button>
       </div>
     `;
@@ -1662,22 +1783,182 @@ function renderAlgs() {
         renderAlgs();
         return;
       }
-      selectedAlgId = item.id; loadAlgSimulator(item); renderAlgs();
+      selectedAlgId = item.id;
+      loadAlgSimulator(item);
+      renderAlgs();
     });
     algGrid.appendChild(card);
   });
 
-  const current = list.find((a) => a.id === selectedAlgId) || list[0];
+  const current = list.find((a) => a.id === selectedAlgId) || filtered[0];
   if (current) loadAlgSimulator(current);
 }
 
-function loadAlgSimulator(item) {
-  algSimTitle.textContent = item.name; algSimCat.textContent = item.cat;
-  algSimMoves.textContent = item.alg; algSimTip.textContent = item.tip;
-  algPlayer.setAttribute("experimental-stickering", item.stickering);
-  algPlayer.setAttribute("alg", item.alg);
-  try { algPlayer.experimentalStickering = item.stickering; algPlayer.alg = item.alg; algPlayer.timestamp = 0; } catch {}
+function stopAlgPlayback() {
+  clearInterval(algPlayTimer);
+  algPlayTimer = null;
+  algIsPlaying = false;
+  const playBtn = $("alg-play-btn");
+  if (playBtn) playBtn.textContent = "▶ Play";
+  if (activeAlgTwisty) {
+    try { activeAlgTwisty.pause?.(); } catch {}
+  }
 }
+
+function renderAlgSimulatorStage() {
+  if (!currentAlgItem) return;
+  const host = $("alg-sim-player");
+  const modeBtn = $("alg-view-mode-btn");
+  const speed = Number($("alg-speed-select")?.value || 1);
+  const canWebGL = Boolean(customElements.get("twisty-player"));
+  const useWebGL = algViewMode === "webgl" && canWebGL && activeTab === "algs";
+
+  if (modeBtn) modeBtn.textContent = useWebGL ? "3D Video" : "Step Cube";
+
+  if (useWebGL) {
+    host.innerHTML = "";
+    const tp = document.createElement("twisty-player");
+    tp.setAttribute("puzzle", "3x3x3");
+    tp.setAttribute("visualization", "3D");
+    tp.setAttribute("background", "none");
+    tp.setAttribute("control-panel", "bottom-row");
+    tp.setAttribute("experimental-setup-anchor", "end");
+    tp.setAttribute("experimental-stickering", currentAlgItem.stickering);
+    tp.setAttribute("alg", currentAlgItem.alg);
+    try { tp.tempoScale = speed; } catch {}
+    host.appendChild(tp);
+    activeAlgTwisty = tp;
+  } else {
+    activeAlgTwisty = null;
+    const cube = getCubeAtStep(currentAlgItem.alg, algStepIndex);
+    host.innerHTML = `<div style="width:100%;height:100%;display:grid;place-items:center;padding:8px;">${renderIsoCubeSVG(cube, 30, 110, 98, "0 0 220 200")}</div>`;
+  }
+  renderAlgMoveChips();
+}
+
+function renderAlgMoveChips() {
+  if (!currentAlgItem) return;
+  const toks = currentAlgItem.alg.trim().split(/\s+/).filter(Boolean);
+  algSimMoves.innerHTML = toks.map((t, i) => {
+    const cls = i === algStepIndex ? "current" : i < algStepIndex ? "done" : "";
+    return `<button class="move-chip ${cls}" data-step="${i + 1}" type="button">${t}</button>`;
+  }).join("");
+
+  algSimMoves.querySelectorAll(".move-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      stopAlgPlayback();
+      algViewMode = "step";
+      algStepIndex = Number(chip.dataset.step);
+      renderAlgSimulatorStage();
+    });
+  });
+}
+
+function loadAlgSimulator(item) {
+  stopAlgPlayback();
+  currentAlgItem = item;
+  algStepIndex = 0;
+  algSimTitle.textContent = item.name;
+  algSimCat.textContent = item.cat;
+  algSimTip.textContent = item.tip;
+  renderAlgSimulatorStage();
+}
+
+function onTabVisible(tab) {
+  if (tab === "algs") {
+    const method = METHOD_ALGS[settings.profileMethod] ? settings.profileMethod : "CFOP";
+    const list = METHOD_ALGS[method];
+    const current = list.find((a) => a.id === selectedAlgId) || list[0];
+    if (current) loadAlgSimulator(current);
+  } else if (tab === "guide") {
+    stopAlgPlayback();
+    const guide = METHOD_GUIDES[settings.profileMethod] || METHOD_GUIDES.CFOP;
+    const st = guide.stages.find((s) => s.id === selectedStageId) || guide.stages[0];
+    if (st) loadStageSimulator(st);
+  } else {
+    stopAlgPlayback();
+  }
+}
+
+// Simulator playback & search events
+$("alg-search-input")?.addEventListener("input", (e) => {
+  algSearchQuery = e.target.value;
+  renderAlgs();
+});
+
+$("alg-view-mode-btn")?.addEventListener("click", () => {
+  stopAlgPlayback();
+  algViewMode = algViewMode === "webgl" ? "step" : "webgl";
+  renderAlgSimulatorStage();
+});
+
+$("alg-play-btn")?.addEventListener("click", () => {
+  if (!currentAlgItem) return;
+  const playBtn = $("alg-play-btn");
+  const toks = currentAlgItem.alg.trim().split(/\s+/).filter(Boolean);
+  const speed = Number($("alg-speed-select")?.value || 1);
+
+  if (algIsPlaying) {
+    stopAlgPlayback();
+    return;
+  }
+
+  if (algViewMode === "webgl" && activeAlgTwisty) {
+    try {
+      activeAlgTwisty.tempoScale = speed;
+      activeAlgTwisty.jumpToStart?.();
+      activeAlgTwisty.play?.();
+      algIsPlaying = true;
+      playBtn.textContent = "⏸ Pause";
+      const totalMs = Math.max(1200, Math.round((toks.length * 550) / speed));
+      algPlayTimer = setTimeout(() => { algIsPlaying = false; playBtn.textContent = "▶ Play"; }, totalMs);
+      return;
+    } catch {}
+  }
+
+  // Step-by-step Isometric Cube animation
+  if (algStepIndex >= toks.length) algStepIndex = 0;
+  algIsPlaying = true;
+  playBtn.textContent = "⏸ Pause";
+  renderAlgSimulatorStage();
+  algPlayTimer = setInterval(() => {
+    if (algStepIndex < toks.length) {
+      algStepIndex++;
+      renderAlgSimulatorStage();
+    } else {
+      stopAlgPlayback();
+    }
+  }, Math.round(550 / speed));
+});
+
+$("alg-reset-btn")?.addEventListener("click", () => {
+  stopAlgPlayback();
+  algStepIndex = 0;
+  renderAlgSimulatorStage();
+});
+
+$("alg-prev-btn")?.addEventListener("click", () => {
+  if (!currentAlgItem) return;
+  stopAlgPlayback();
+  algViewMode = "step";
+  algStepIndex = Math.max(0, algStepIndex - 1);
+  renderAlgSimulatorStage();
+});
+
+$("alg-next-btn")?.addEventListener("click", () => {
+  if (!currentAlgItem) return;
+  stopAlgPlayback();
+  algViewMode = "step";
+  const toks = currentAlgItem.alg.trim().split(/\s+/).filter(Boolean);
+  algStepIndex = Math.min(toks.length, algStepIndex + 1);
+  renderAlgSimulatorStage();
+});
+
+$("alg-speed-select")?.addEventListener("change", () => {
+  if (activeAlgTwisty) {
+    try { activeAlgTwisty.tempoScale = Number($("alg-speed-select").value); } catch {}
+  }
+});
 
 algFilterPills.addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-cat]");
@@ -1710,9 +1991,23 @@ function renderGuide() {
 
 function loadStageSimulator(stage) {
   stageSimTitle.textContent = stage.title; stageSimBadge.textContent = stage.split;
-  stagePlayer.setAttribute("experimental-stickering", stage.stickering);
-  stagePlayer.setAttribute("alg", stage.alg);
-  try { stagePlayer.experimentalStickering = stage.stickering; stagePlayer.alg = stage.alg; stagePlayer.timestamp = 0; } catch {}
+  const wrap = stagePlayer?.parentElement;
+  if (!wrap) return;
+  if (customElements.get("twisty-player") && activeTab === "guide") {
+    wrap.innerHTML = "";
+    const tp = document.createElement("twisty-player");
+    tp.id = "stage-player";
+    tp.setAttribute("puzzle", "3x3x3");
+    tp.setAttribute("visualization", "3D");
+    tp.setAttribute("background", "none");
+    tp.setAttribute("experimental-setup-anchor", "end");
+    tp.setAttribute("experimental-stickering", stage.stickering);
+    tp.setAttribute("alg", stage.alg);
+    wrap.appendChild(tp);
+  } else {
+    const cube = getCubeAtStep(stage.alg, 0);
+    wrap.innerHTML = `<div style="width:100%;height:100%;display:grid;place-items:center;">${renderIsoCubeSVG(cube, 30, 110, 98, "0 0 220 200")}</div>`;
+  }
 }
 
 // === SECTION A10: NAVIGATION, IMPORT/EXPORT, SETTINGS & PROFILE ===
@@ -1723,6 +2018,7 @@ navTabs.forEach((btn) => btn.addEventListener("click", () => {
   viewTimer.classList.toggle("hidden", activeTab !== "timer");
   viewAlgs.classList.toggle("hidden", activeTab !== "algs");
   viewGuide.classList.toggle("hidden", activeTab !== "guide");
+  onTabVisible(activeTab);
   btn.blur();
 }));
 
