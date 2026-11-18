@@ -147,61 +147,64 @@ async function init() {
   renderAll();
 
   initCloud((user, info) => {
-  const inBtn = $("google-signin-btn"), outBtn = $("google-signout-btn");
-  if (user) {
-    $("cloud-status-title").textContent = user.displayName || user.email;
-    $("cloud-status-sub").textContent = "Auto-syncing solves, alg drills & theme";
-    inBtn.classList.add("hidden"); outBtn.classList.remove("hidden");
-    if (user.photoURL) $("profile-avatar").innerHTML = `<img src="${user.photoURL}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+    const inBtn = $("google-signin-btn");
+    const outBtn = $("google-signout-btn");
 
-    if (info?.cloudData) {
-      const cloudSolves = Array.isArray(info.cloudData.solves) ? info.cloudData.solves : [];
-      const seen = new Set(solves.map((s) => s.id));
-      cloudSolves.forEach((cs) => { if (!seen.has(cs.id)) { solves.push(cs); seen.add(cs.id); } });
-      solves.sort((a, b) => a.createdAt - b.createdAt);
-      localStorage.setItem(STORAGE_SOLVES_KEY, JSON.stringify(solves));
+    if (user) {
+      const name = user.displayName || user.email.split("@")[0];
+      $("cloud-status-title").textContent = name;
+      $("cloud-status-sub").textContent = "Auto-syncing solves & alg drills";
+      inBtn.classList.add("hidden");
+      outBtn.classList.remove("hidden");
 
-      if (info.cloudData.algReps) {
-        const localReps = JSON.parse(localStorage.getItem("algtimer_alg_reps_v1") || "{}");
-        for (const [k, arr] of Object.entries(info.cloudData.algReps)) {
-          const cur = localReps[k] || [];
-          const seenR = new Set(cur.map((r) => r.createdAt));
-          arr.forEach((r) => { if (!seenR.has(r.createdAt)) cur.push(r); });
-          localReps[k] = cur.sort((a, b) => a.createdAt - b.createdAt);
+      $("profile-name-label").textContent = name;
+      if (user.photoURL) {
+        $("profile-avatar").innerHTML = `<img src="${user.photoURL}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+      } else {
+        $("profile-avatar").textContent = (name[0] || "C").toUpperCase();
+      }
+
+      // Close the profile modal and confirm
+      closeModals();
+      showToast(`Signed in as ${name}!`);
+
+      // Merge cloud solves if they exist
+      if (info?.cloudData?.solves) {
+        const cloudSolves = Array.isArray(info.cloudData.solves) ? info.cloudData.solves : [];
+        const seen = new Set(solves.map((s) => s.id));
+        let added = 0;
+        cloudSolves.forEach((cs) => {
+          if (!seen.has(cs.id)) {
+            solves.push(cs);
+            seen.add(cs.id);
+            added++;
+          }
+        });
+        if (added > 0) {
+          solves.sort((a, b) => a.createdAt - b.createdAt);
+          saveSolves();
+          renderAll();
         }
-        localStorage.setItem("algtimer_alg_reps_v1", JSON.stringify(localReps));
-        reloadTrainerReps();
       }
 
-      if (!localStorage.getItem(STORAGE_THEME_KEY) && info.cloudData.theme) {
-        activeTheme = { ...DEFAULT_THEME, ...info.cloudData.theme };
-        localStorage.setItem(STORAGE_THEME_KEY, JSON.stringify(activeTheme));
-        applyThemeToDOM(activeTheme, uploadedBgDataUrl);
-      }
-      if (!localStorage.getItem(STORAGE_SETTINGS_KEY) && info.cloudData.settings) {
-        settings = { ...DEFAULT_SETTINGS, ...info.cloudData.settings };
-        localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(settings));
-        applySettingsToUI();
-        syncMethodViews();
-      }
-      renderAll();
+      pushAllToCloud();
+    } else {
+      $("cloud-status-title").textContent = "Cloud Sync (Off)";
+      $("cloud-status-sub").textContent = "Sign in to save solves across devices";
+      inBtn.classList.remove("hidden");
+      outBtn.classList.add("hidden");
+      $("profile-avatar").textContent = (settings.profileName[0] || "C").toUpperCase();
     }
-    pushAllToCloud();
-  } else {
-    $("cloud-status-title").textContent = info?.configured ? "Signed Out" : "Cloud Sync (Setup Needed)";
-    $("cloud-status-sub").textContent = info?.configured ? "Sign in to sync across devices" : "Check cloud.js";
-    inBtn.classList.remove("hidden"); outBtn.classList.add("hidden");
-    $("profile-avatar").textContent = (settings.profileName[0] || "C").toUpperCase();
-  }
-});
+  });
 
 $("google-signin-btn").addEventListener("click", async () => {
-  try {
-    const res = await signInGoogle();
-    if (res?.error) showToast(res.error);
-  } catch { showToast("Sign-in cancelled or blocked."); }
-});
-$("google-signout-btn").addEventListener("click", () => signOutGoogle());
+    try {
+      const res = await signInGoogle();
+      if (res?.error) showToast(res.error);
+    } catch (e) {
+      showToast(e?.code || e?.message || "Sign-in failed");
+    }
+  });
 
   uploadedBgDataUrl = await loadUploadedBg();
   if (uploadedBgDataUrl) applyThemeToDOM(activeTheme, uploadedBgDataUrl);

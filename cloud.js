@@ -1,4 +1,4 @@
-// === cloud.js — Google Sign-In & Auto-Sync via Firebase ===
+// === cloud.js — Google Sign-In & Auto-Sync ===
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDT1XQir4xIzJfiZFvf-EYH9GH52g6cswE",
   authDomain: "algtimer.firebaseapp.com",
@@ -16,14 +16,10 @@ let currentUser = null;
 let syncTimer = null;
 
 export function isCloudConfigured() {
-  return FIREBASE_CONFIG.apiKey && !FIREBASE_CONFIG.apiKey.startsWith("PASTE_");
+  return Boolean(FIREBASE_CONFIG.apiKey);
 }
 
 export async function initCloud(onAuthChange) {
-  if (!isCloudConfigured()) {
-    onAuthChange(null, { configured: false });
-    return;
-  }
   try {
     const appMod = await import("https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js");
     authMod = await import("https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js");
@@ -36,27 +32,50 @@ export async function initCloud(onAuthChange) {
     authMod.onAuthStateChanged(auth, async (user) => {
       currentUser = user;
       if (user) {
-        const cloudData = await pullFromCloud(user.uid);
-        onAuthChange(user, { configured: true, cloudData });
+        // Run callback immediately so the UI updates without waiting on Firestore
+        onAuthChange(user, { configured: true });
+
+        // Pull cloud data in background with a timeout
+        try {
+          const cloudData = await Promise.race([
+            pullFromCloud(user.uid),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000)),
+          ]);
+          if (cloudData) {
+            onAuthChange(user, { configured: true, cloudData });
+          }
+        } catch (e) {
+          console.warn("Cloud pull skipped or offline:", e);
+        }
       } else {
         onAuthChange(null, { configured: true });
       }
     });
   } catch (err) {
-    console.warn("Firebase failed to load:", err);
+    console.error("Firebase init error:", err);
     onAuthChange(null, { configured: false });
   }
 }
 
 export async function signInGoogle() {
-  if (!auth || !authMod) return { error: "Cloud auth not ready yet—refresh and try again." };
+  if (!auth || !authMod) {
+    return { error: "Auth is still loading. Refresh and try again." };
+  }
   const provider = new authMod.GoogleAuthProvider();
-  await authMod.signInWithPopup(auth, provider);
-  return { ok: true };
+  provider.setCustomParameters({ prompt: "select_account" });
+  try {
+    await authMod.signInWithPopup(auth, provider);
+    return { ok: true };
+  } catch (err) {
+    console.warn("Google sign-in error:", err);
+    return { error: err.code || err.message || "Sign-in failed." };
+  }
 }
 
 export async function signOutGoogle() {
-  if (auth && authMod) await authMod.signOut(auth);
+  if (auth && authMod) {
+    await authMod.signOut(auth);
+  }
 }
 
 export async function pullFromCloud(uid) {
@@ -76,7 +95,7 @@ export function scheduleCloudPush(getPayloadFn) {
         updatedAt: Date.now(),
       }, { merge: true });
     } catch (err) {
-      console.warn("Cloud sync error:", err);
+      console.warn("Cloud sync save error:", err);
     }
-  }, 1500);
+  }, 1200);
 }
