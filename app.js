@@ -778,7 +778,10 @@ function renderAdvancedStats(eventSolves) {
   const n = valid.length, sX = (n * (n - 1)) / 2, sXX = (n * (n - 1) * (2 * n - 1)) / 6, sY = valid.reduce((a, b) => a + b, 0), sXY = valid.reduce((a, y, i) => a + i * y, 0);
   const slp10 = ((n * sXX - sX * sX) ? (n * sXY - sX * sY) / (n * sXX - sX * sX) : 0) * 10;
   const slopeText = slp10 <= -20 ? `↗ -${formatTime(Math.abs(slp10), 2)}s / 10` : slp10 >= 20 ? `↘ +${formatTime(slp10, 2)}s / 10` : "→ Steady";
+  
   const tMin = Math.min(...pbPts, ...rollPts), tMax = Math.max(...pbPts, ...rollPts), tSpan = Math.max(1, tMax - tMin);
+  const tMid = (tMin + tMax) / 2; // <-- Defined here correctly
+  
   const tx = (i) => tPadL + (i / (n - 1)) * (trajW - tPadL - tPadR);
   const ty = (v) => tPadT + (1 - (v - tMin) / tSpan) * (trajH - tPadT - tPadB);
 
@@ -891,12 +894,10 @@ function renderAdvancedStats(eventSolves) {
     advStatsBody.innerHTML = jumpHtml + chartsHtml + tableHtml;
   }
 
-  // Wire "Jump to Table" button in All mode
   $("jump-to-table-btn")?.addEventListener("click", () => {
     $("stats-records-table-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
-  // Hook view tabs (All / Records Table / Charts)
   const tabWrap = $("adv-view-tabs");
   if (tabWrap) {
     tabWrap.querySelectorAll(".seg-btn").forEach((btn) => {
@@ -908,11 +909,18 @@ function renderAdvancedStats(eventSolves) {
     });
   }
 
-  // Hook tooltips
   advStatsBody.querySelectorAll(".chart-tip-target").forEach((el) => {
-    el.addEventListener("pointerenter", (e) => showTooltip(el.dataset.tip, e.clientX, e.clientY));
-    el.addEventListener("pointermove", (e) => showTooltip(el.dataset.tip, e.clientX, e.clientY));
-    el.addEventListener("pointerleave", hideTooltip);
+    el.addEventListener("pointerenter", (e) => {
+      advChartTooltip.textContent = el.dataset.tip;
+      advChartTooltip.classList.remove("hidden");
+      advChartTooltip.style.left = `${e.clientX}px`;
+      advChartTooltip.style.top = `${e.clientY}px`;
+    });
+    el.addEventListener("pointermove", (e) => {
+      advChartTooltip.style.left = `${e.clientX}px`;
+      advChartTooltip.style.top = `${e.clientY}px`;
+    });
+    el.addEventListener("pointerleave", () => advChartTooltip.classList.add("hidden"));
   });
 }
 
