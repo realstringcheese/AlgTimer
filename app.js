@@ -1,6 +1,12 @@
 import { EVENT_TO_PUZZLE, CSTIMER_EVENT_MAP, PREMADE_SCENES, QUICK_MOODS, COLOR_PRESETS, SCENE_PRESETS } from "./data.js";
-import { initTrainer, syncMethodViews, onTrainerTabVisible, renderImprovementView, handleImprovementKeyDown, handleImprovementKeyUp, handleImprovementPointerUp, formatTime } from "./trainer.js";
+import { initTrainer, syncMethodViews, onTrainerTabVisible, renderImprovementView, handleImprovementKeyDown, handleImprovementKeyUp, handleImprovementPointerUp } from "./trainer.js";
 import { initCloud, signInGoogle, signOutGoogle, scheduleCloudPush } from "./cloud.js";
+
+function formatTime(ms, decimals = 2) {
+  if (!ms || isNaN(ms)) return "0.00";
+  const seconds = ms / 1000;
+  return seconds.toFixed(decimals);
+}
 
 // === SECTION A1: STORAGE KEYS & DEFAULTS ===
 let randomScrambleForEvent = null;
