@@ -716,8 +716,6 @@ function renderSparkline(eventSolves) {
 
 let advStatsViewMode = "all"; // "all" | "table" | "charts"
 
-let advStatsViewMode = "all"; // "all" | "table" | "charts"
-
 function renderAdvancedStats(eventSolves) {
   const dec = settings.decimals;
   const validEntries = eventSolves
