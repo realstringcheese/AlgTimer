@@ -916,23 +916,35 @@ function startTimer() {
 
 function stopTimer(stopTrigger) {
   const stopTime = performance.now();
-  cancelAnimationFrame(rafId); rafId = null;
+  cancelAnimationFrame(rafId);
+  rafId = null;
   const elapsedMs = Math.max(1, Math.round(stopTime - startTime));
-  activeTrigger = stopTrigger; setTimerState("stopping");
+  activeTrigger = stopTrigger;
 
   const prevEventSolves = getCurrentEventSolves();
   const solve = {
     id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
-    event: settings.event, rawMs: elapsedMs, penalty: pendingPenalty, scramble: currentScramble, createdAt: Date.now(),
+    event: settings.event,
+    rawMs: elapsedMs,
+    penalty: pendingPenalty,
+    scramble: currentScramble,
+    createdAt: Date.now(),
   };
   pendingPenalty = null;
 
+  // 1. Immediately paint the result and un-hide the UI on frame 1
+  timerDisplay.textContent = formatSolve(solve, settings.decimals);
+  setTimerState("stopping");
+
   solves.push(solve);
   saveSolves();
-  timerDisplay.textContent = formatSolve(solve, settings.decimals);
-  renderAll();
-  checkAndCelebratePB(prevEventSolves, solve);
-  loadNextScramble(settings.event);
+
+  // 2. Defer heavy graphs, list rendering, and next scramble to the next tick
+  setTimeout(() => {
+    renderAll();
+    loadNextScramble(settings.event);
+    checkAndCelebratePB(prevEventSolves, solve);
+  }, 0);
 }
 
 function finishStopCycle() { if (timerState === "stopping") { activeTrigger = null; setTimerState("idle"); } }
@@ -1155,22 +1167,33 @@ function renderSparkline(eventSolves) {
     return;
   }
 
-  const series = data.map((d, i) => {
-    const win = data.slice(Math.max(0, i - 4), i + 1);
-    const avg = win.reduce((acc, x) => acc + x.ms, 0) / win.length;
-    return { ...d, plotMs: settings.trendFlatten ? avg : d.ms };
-  });
-
-  let min, max;
-  if (settings.trendFlatten && series.length >= 6) {
-    const sorted = [...series.map((s) => s.plotMs)].sort((a, b) => a - b);
-    min = sorted[Math.floor(sorted.length * 0.05)];
-    max = sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1)];
-    if (max <= min) { min = Math.min(...sorted); max = Math.max(...sorted); }
+  let series;
+  if (settings.trendFlatten && data.length >= 8) {
+    // Group solves into max 24 smoothed average points
+    const buckets = Math.min(24, Math.max(8, Math.floor(data.length / 2)));
+    const step = data.length / buckets;
+    series = [];
+    for (let b = 0; b < buckets; b++) {
+      const sIdx = Math.round(b * step);
+      const eIdx = Math.min(data.length, Math.round((b + 1) * step));
+      const slice = data.slice(sIdx, Math.max(sIdx + 1, eIdx));
+      const avg = slice.reduce((acc, x) => acc + x.ms, 0) / slice.length;
+      series.push({
+        num: `${slice[0].num}–${slice[slice.length - 1].num}`,
+        plotMs: avg,
+        label: `${formatTime(avg, settings.decimals)} avg`,
+      });
+    }
   } else {
-    min = Math.min(...series.map((s) => s.plotMs));
-    max = Math.max(...series.map((s) => s.plotMs));
+    series = data.map((d) => ({ num: String(d.num), plotMs: d.ms, label: d.label }));
   }
+
+  const rawMin = Math.min(...series.map((s) => s.plotMs));
+  const rawMax = Math.max(...series.map((s) => s.plotMs));
+  const baseSpan = Math.max(200, rawMax - rawMin);
+  const padMs = settings.trendFlatten ? baseSpan * 0.2 : 0;
+  const min = Math.max(0, rawMin - padMs);
+  const max = rawMax + padMs;
   const span = Math.max(1, max - min);
 
   const w = 260, h = 98, pad = 12;
@@ -1180,31 +1203,26 @@ function renderSparkline(eventSolves) {
     ...d,
     x: pad + (i / (series.length - 1)) * (w - pad * 2),
     y: clampY(d.plotMs),
-    rawY: clampY(d.ms),
   }));
 
   const poly = coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
-  const rawDots = settings.trendFlatten
-    ? coords.map((c) => `<circle cx="${c.x.toFixed(1)}" cy="${c.rawY.toFixed(1)}" r="1.4" fill="currentColor" opacity="0.22" />`).join("")
-    : "";
 
+  const showDots = coords.length <= 30;
   const dots = coords.map((c) => `
-    <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${series.length > 60 ? 1.7 : 2.4}" fill="currentColor" opacity="0.92" />
+    ${showDots ? `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="2.2" fill="currentColor" opacity="0.9" />` : ""}
     <circle class="spark-hit" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="9" fill="transparent"
-      data-num="${c.num}" data-label="${settings.trendFlatten ? `${formatTime(c.plotMs, settings.decimals)} avg (${c.label})` : c.label}"
-      data-x="${(c.x / w) * 100}" data-y="${(c.y / h) * 100}" style="cursor:pointer;" />
+      data-num="${c.num}" data-label="${c.label}" data-x="${(c.x / w) * 100}" data-y="${(c.y / h) * 100}" style="cursor:pointer;" />
   `).join("");
 
   const scaleLabels = settings.trendFlatten
-    ? `<text x="6" y="12" fill="currentColor" opacity="0.45" font-size="8" font-family="monospace">${formatTime(max, 1)}</text>
-       <text x="6" y="${h - 4}" fill="currentColor" opacity="0.45" font-size="8" font-family="monospace">${formatTime(min, 1)}</text>`
+    ? `<text x="6" y="11" fill="currentColor" opacity="0.5" font-size="8" font-family="monospace">${formatTime(rawMax, 1)}</text>
+       <text x="6" y="${h - 3}" fill="currentColor" opacity="0.5" font-size="8" font-family="monospace">${formatTime(rawMin, 1)}</text>`
     : "";
 
   sparklineWrap.innerHTML = `
     <svg viewBox="0 0 ${w} ${h}" width="100%" height="100%" style="color: var(--accent-color)">
       ${scaleLabels}
-      ${rawDots}
-      <polyline fill="none" stroke="currentColor" stroke-width="1.9" stroke-opacity="0.9" points="${poly}" />
+      <polyline fill="none" stroke="currentColor" stroke-width="1.8" stroke-opacity="0.9" stroke-linejoin="round" points="${poly}" />
       ${dots}
     </svg>
     <div id="sparkline-tooltip" class="sparkline-tooltip hidden"></div>
