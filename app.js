@@ -1222,6 +1222,8 @@ function renderSparkline(eventSolves) {
   });
 }
 
+let advBracketStep = 5000;
+
 function renderAdvancedStats(eventSolves) {
   const dec = settings.decimals;
   const validEntries = eventSolves
@@ -1247,30 +1249,47 @@ function renderAdvancedStats(eventSolves) {
     return;
   }
 
-  const allBrackets = [
-    { label: "0–5s", min: 0, max: 5000, count: 0 },
-    { label: "5–10s", min: 5000, max: 10000, count: 0 },
-    { label: "10–15s", min: 10000, max: 15000, count: 0 },
-    { label: "15–20s", min: 15000, max: 20000, count: 0 },
-    { label: "20–30s", min: 20000, max: 30000, count: 0 },
-    { label: "30–45s", min: 30000, max: 45000, count: 0 },
-    { label: "45s+", min: 45000, max: Infinity, count: 0 },
-  ];
-  valid.forEach((t) => { const b = allBrackets.find((x) => t >= x.min && t < x.max); if (b) b.count++; });
-  const firstB = allBrackets.findIndex((b) => b.count > 0);
-  const lastB = allBrackets.length - 1 - [...allBrackets].reverse().findIndex((b) => b.count > 0);
-  const activeBrackets = allBrackets.slice(Math.max(0, firstB), Math.min(allBrackets.length, lastB + 1));
-  const maxBracket = Math.max(...activeBrackets.map((b) => b.count), 1);
-
-  const bracketsHtml = activeBrackets.map((b) => `
-    <div class="bracket-row">
+  // 1. Time Distribution Brackets (5s or 2s toggleable)
+  let brackets = [];
+  if (advBracketStep === 5000) {
+    const fixed = [
+      { label: "0–5s", min: 0, max: 5000 },
+      { label: "5–10s", min: 5000, max: 10000 },
+      { label: "10–15s", min: 10000, max: 15000 },
+      { label: "15–20s", min: 15000, max: 20000 },
+      { label: "20–25s", min: 20000, max: 25000 },
+      { label: "25–30s", min: 25000, max: 30000 },
+      { label: "30–45s", min: 30000, max: 45000 },
+      { label: "45s+", min: 45000, max: Infinity },
+    ].map((b) => {
+      const items = valid.filter((t) => t >= b.min && t < b.max);
+      return { ...b, count: items.length, avg: items.length ? items.reduce((a, x) => a + x, 0) / items.length : null };
+    });
+    const f = fixed.findIndex((b) => b.count > 0);
+    const l = fixed.length - 1 - [...fixed].reverse().findIndex((b) => b.count > 0);
+    brackets = fixed.slice(Math.max(0, f), Math.min(fixed.length, l + 1));
+  } else {
+    const sortedV = [...valid].sort((a, b) => a - b);
+    const p02 = sortedV[Math.floor(sortedV.length * 0.02)];
+    const startMs = Math.floor(p02 / 2000) * 2000;
+    for (let i = 0; i < 8; i++) {
+      const lo = startMs + i * 2000, hi = i === 7 ? Infinity : lo + 2000;
+      const items = valid.filter((t) => (i === 0 ? t < hi : t >= lo && t < hi));
+      const label = i === 0 && lo > 0 ? `<${hi / 1000}s` : hi === Infinity ? `${lo / 1000}s+` : `${lo / 1000}–${hi / 1000}s`;
+      brackets.push({ label, count: items.length, avg: items.length ? items.reduce((a, x) => a + x, 0) / items.length : null });
+    }
+  }
+  const maxBracket = Math.max(...brackets.map((b) => b.count), 1);
+  const bracketsHtml = brackets.map((b) => `
+    <div class="bracket-row chart-tip-target" data-tip="${b.label}: ${b.count} solves (${Math.round((b.count / valid.length) * 100)}%)${b.avg ? ` • Avg ${formatTime(b.avg, dec)}` : ""}">
       <span>${b.label}</span>
       <div class="bracket-track"><div class="bracket-fill" style="width:${Math.round((b.count / maxBracket) * 100)}%"></div></div>
       <span class="bracket-val">${b.count} (${Math.round((b.count / valid.length) * 100)}%)</span>
     </div>
   `).join("");
 
-  const trajW = 340, trajH = 128, tPad = 14;
+  // 2. Improvement Trajectory (Gridlines + Hover Scrubbing + PB Staircase)
+  const trajW = 360, trajH = 142, tPadL = 36, tPadR = 10, tPadT = 12, tPadB = 20;
   let runningPB = Infinity;
   const pbPoints = [], rollPoints = [], rollWin = valid.length >= 12 ? 12 : 3;
   for (let i = 0; i < valid.length; i++) {
@@ -1279,105 +1298,150 @@ function renderAdvancedStats(eventSolves) {
     const slice = valid.slice(Math.max(0, i - rollWin + 1), i + 1);
     rollPoints.push(slice.reduce((a, b) => a + b, 0) / slice.length);
   }
-
   const n = valid.length;
   const sumX = (n * (n - 1)) / 2, sumXX = (n * (n - 1) * (2 * n - 1)) / 6;
-  const sumY = valid.reduce((a, b) => a + b, 0);
-  const sumXY = valid.reduce((a, y, i) => a + i * y, 0);
+  const sumY = valid.reduce((a, b) => a + b, 0), sumXY = valid.reduce((a, y, i) => a + i * y, 0);
   const slope = (n * sumXX - sumX * sumX) ? (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX) : 0;
   const slopePer10 = slope * 10;
-  const slopeText = slopePer10 <= -20 ? `↗ Improving -${formatTime(Math.abs(slopePer10), 2)}s / 10` : slopePer10 >= 20 ? `↘ Slower +${formatTime(slopePer10, 2)}s / 10` : "→ Steady pace";
+  const slopeText = slopePer10 <= -20 ? `↗ -${formatTime(Math.abs(slopePer10), 2)}s / 10` : slopePer10 >= 20 ? `↘ +${formatTime(slopePer10, 2)}s / 10` : "→ Steady";
 
   const tMin = Math.min(...pbPoints, ...rollPoints), tMax = Math.max(...pbPoints, ...rollPoints), tSpan = Math.max(1, tMax - tMin);
-  const toXY = (val, i) => `${(tPad + (i / (n - 1)) * (trajW - tPad * 2)).toFixed(1)},${(trajH - tPad - ((val - tMin) / tSpan) * (trajH - tPad * 2)).toFixed(1)}`;
-  const pbPoly = pbPoints.map(toXY).join(" "), rollPoly = rollPoints.map(toXY).join(" ");
+  const tMid = (tMin + tMax) / 2;
+  const tx = (i) => tPadL + (i / (n - 1)) * (trajW - tPadL - tPadR);
+  const ty = (val) => tPadT + (1 - (val - tMin) / tSpan) * (trajH - tPadT - tPadB);
+  const pbPoly = pbPoints.map((v, i) => `${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ");
+  const rollPoly = rollPoints.map((v, i) => `${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ");
 
-  const todBuckets = [
-    { label: "Morning", sum: 0, count: 0 }, { label: "Afternoon", sum: 0, count: 0 },
-    { label: "Evening", sum: 0, count: 0 }, { label: "Night", sum: 0, count: 0 },
-  ];
+  const stepTraj = Math.max(1, Math.floor(n / 24));
+  const trajHits = [];
+  for (let i = 0; i < n; i += stepTraj) {
+    trajHits.push(`<circle class="chart-tip-target" cx="${tx(i).toFixed(1)}" cy="${ty(rollPoints[i]).toFixed(1)}" r="7" fill="transparent" data-tip="Solve #${validEntries[i].idx} • Ao${rollWin}: ${formatTime(rollPoints[i], dec)} • PB: ${formatTime(pbPoints[i], dec)}" style="cursor:crosshair"/>`);
+  }
+
+  // 3. Hourly Performance (Real Active Hours: Bar = Solve Count, Accent = Fastest Hour)
+  const hourBuckets = Array.from({ length: 24 }, (_, hr) => ({ hr, sum: 0, count: 0, best: Infinity }));
   validEntries.forEach((e) => {
     const hr = new Date(e.createdAt).getHours();
-    const bi = hr >= 5 && hr < 12 ? 0 : hr >= 12 && hr < 17 ? 1 : hr >= 17 && hr < 22 ? 2 : 3;
-    todBuckets[bi].sum += e.ms; todBuckets[bi].count++;
+    hourBuckets[hr].sum += e.ms; hourBuckets[hr].count++;
+    if (e.ms < hourBuckets[hr].best) hourBuckets[hr].best = e.ms;
   });
-  const todAvgs = todBuckets.map((b) => (b.count ? b.sum / b.count : null));
-  const validTods = todAvgs.filter((v) => v !== null);
-  const bestTodVal = validTods.length ? Math.min(...validTods) : null;
-  const maxTodVal = validTods.length ? Math.max(...validTods) : 1;
-  const bestTodName = bestTodVal !== null ? todBuckets[todAvgs.indexOf(bestTodVal)].label : "-";
+  const activeHours = hourBuckets.filter((h) => h.count > 0);
+  const maxHourCount = Math.max(...activeHours.map((h) => h.count), 1);
+  const fastestHour = [...activeHours].sort((a, b) => (a.sum / a.count) - (b.sum / b.count))[0];
+  const fmtHr = (hr) => hr === 0 ? "12a" : hr < 12 ? `${hr}a` : hr === 12 ? "12p" : `${hr - 12}p`;
 
-  const todHtml = todBuckets.map((b, i) => {
-    const avg = todAvgs[i];
-    const hPct = avg !== null ? Math.max(18, Math.round((1 - (avg - bestTodVal * 0.85) / Math.max(1, maxTodVal - bestTodVal * 0.85)) * 85 + 15)) : 8;
-    const isBest = avg !== null && avg === bestTodVal;
+  const hourlyHtml = activeHours.map((h) => {
+    const avg = h.sum / h.count;
+    const hPct = Math.max(14, Math.round((h.count / maxHourCount) * 100));
+    const isFastest = fastestHour && h.hr === fastestHour.hr;
     return `
-      <div class="tod-col ${isBest ? "best" : ""}">
-        <span class="tod-time">${avg !== null ? formatTime(avg, 2) : "-"}</span>
-        <div class="tod-bar-wrap"><div class="tod-bar" style="height:${avg !== null ? hPct : 6}%"></div></div>
-        <span class="tod-lbl">${b.label} (${b.count})</span>
+      <div class="tod-col ${isFastest ? "best" : ""} chart-tip-target" data-tip="${fmtHr(h.hr)}: ${h.count} solves • ${formatTime(avg, dec)} avg • Best ${formatTime(h.best, dec)}">
+        <span class="tod-time">${h.count}</span>
+        <div class="tod-bar-wrap"><div class="tod-bar" style="height:${hPct}%"></div></div>
+        <span class="tod-lbl">${fmtHr(h.hr)}</span>
       </div>
     `;
   }).join("");
 
+  // 4. Daily Activity & Pace Matrix (Real Dates + Counts + Avg inside each tile)
   const dayMap = new Map();
   validEntries.forEach((e) => {
-    const k = new Date(e.createdAt).toLocaleDateString();
-    if (!dayMap.has(k)) dayMap.set(k, []);
-    dayMap.get(k).push(e.ms);
+    const d = new Date(e.createdAt);
+    const key = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+    const label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    if (!dayMap.has(key)) dayMap.set(key, { label, times: [] });
+    dayMap.get(key).times.push(e.ms);
   });
 
-  let heatCells = [], heatTitleNote = "";
-  if (dayMap.size >= 3) {
-    heatTitleNote = "Last 21 active days";
-    heatCells = [...dayMap.entries()].slice(-21).map(([d, times]) => {
-      const avg = times.reduce((a, b) => a + b, 0) / times.length;
-      const sc = Math.min(1, Math.max(0.18, 1 - (avg - best) / Math.max(1, worst - best)));
-      return { title: `${d}: ${times.length} solves • ${formatTime(avg, 2)} avg`, alpha: sc.toFixed(2) };
+  let paceTiles = [], paceSubtitle = "";
+  if (dayMap.size >= 2) {
+    paceSubtitle = "Daily avg & solves (full bar = faster)";
+    const days = [...dayMap.values()].slice(-12);
+    const dayAvgs = days.map((d) => d.times.reduce((a, b) => a + b, 0) / d.times.length);
+    const minDA = Math.min(...dayAvgs), maxDA = Math.max(...dayAvgs);
+    paceTiles = days.map((d, idx) => {
+      const avg = dayAvgs[idx];
+      const norm = maxDA > minDA ? 1 - (avg - minDA) / (maxDA - minDA) : 0.7;
+      return {
+        top: d.label, main: formatTime(avg, 2), sub: `${d.times.length}x`,
+        pct: Math.round(25 + norm * 75), alpha: (0.35 + norm * 0.65).toFixed(2),
+        tip: `${d.label}: ${d.times.length} solves • ${formatTime(avg, dec)} avg • Best ${formatTime(Math.min(...d.times), dec)}`,
+      };
     });
   } else {
-    heatTitleNote = "5-solve blocks (brighter = faster)";
-    const bSize = valid.length >= 15 ? 5 : 2;
+    paceSubtitle = "Session blocks (full bar = faster)";
+    const bSize = valid.length >= 30 ? 10 : Math.max(2, Math.floor(valid.length / 4));
+    const blocks = [];
     for (let i = 0; i < valid.length; i += bSize) {
       const sl = valid.slice(i, i + bSize);
-      const avg = sl.reduce((a, b) => a + b, 0) / sl.length;
-      const sc = Math.min(1, Math.max(0.18, 1 - (avg - best) / Math.max(1, worst - best)));
-      heatCells.push({ title: `Solves #${i + 1}-${i + sl.length}: ${formatTime(avg, 2)} avg`, alpha: sc.toFixed(2) });
+      blocks.push({ label: `#${i + 1}-${i + sl.length}`, times: sl, avg: sl.reduce((a, b) => a + b, 0) / sl.length });
     }
-    heatCells = heatCells.slice(-28);
+    const minBA = Math.min(...blocks.map((b) => b.avg)), maxBA = Math.max(...blocks.map((b) => b.avg));
+    paceTiles = blocks.slice(-12).map((b) => {
+      const norm = maxBA > minBA ? 1 - (b.avg - minBA) / (maxBA - minBA) : 0.7;
+      return {
+        top: b.label, main: formatTime(b.avg, 2), sub: `${b.times.length}x`,
+        pct: Math.round(25 + norm * 75), alpha: (0.35 + norm * 0.65).toFixed(2),
+        tip: `Solves ${b.label}: ${formatTime(b.avg, dec)} avg • Best ${formatTime(Math.min(...b.times), dec)}`,
+      };
+    });
   }
-  const heatmapHtml = heatCells.map((c) => `<div class="heat-cell" style="opacity:${c.alpha}" title="${c.title}"></div>`).join("");
 
-  const chunkSize = valid.length >= 15 ? 5 : 2;
+  const paceTilesHtml = paceTiles.map((t) => `
+    <div class="pace-tile chart-tip-target" data-tip="${t.tip}">
+      <span class="pace-top">${t.top}</span>
+      <strong class="pace-main">${t.main}</strong>
+      <span class="pace-sub">${t.sub}</span>
+      <div class="pace-bar" style="width:${t.pct}%; opacity:${t.alpha}"></div>
+    </div>
+  `).join("");
+
+  // 5. Speed vs Consistency Scatter Plot (Real Axes, Crosshair & Hover Tooltips)
+  const chunkSize = valid.length >= 40 ? 10 : valid.length >= 15 ? 5 : 2;
   const chunks = [];
   for (let i = 0; i + chunkSize <= valid.length; i += chunkSize) {
     const sl = valid.slice(i, i + chunkSize);
     const cMean = sl.reduce((a, b) => a + b, 0) / sl.length;
     const cSd = Math.sqrt(sl.reduce((a, t) => a + (t - cMean) ** 2, 0) / sl.length);
-    chunks.push({ label: `#${i + 1}-${i + chunkSize}`, mean: cMean, sd: cSd });
+    chunks.push({ label: `#${i + 1}–${i + chunkSize}`, mean: cMean, sd: cSd });
   }
+
   let scatterSvg = `<p class="muted-text">Need ${chunkSize * 2}+ solves for scatter plot</p>`;
   if (chunks.length >= 2) {
-    const sw = 220, sh = 115, sp = 16;
+    const sw = 260, sh = 142, sL = 32, sR = 10, sT = 12, sB = 22;
     const minM = Math.min(...chunks.map((c) => c.mean)), maxM = Math.max(...chunks.map((c) => c.mean));
     const minS = Math.min(...chunks.map((c) => c.sd)), maxS = Math.max(...chunks.map((c) => c.sd));
     const spanM = Math.max(1, maxM - minM), spanS = Math.max(1, maxS - minS);
+    const sx = (m) => sL + ((m - minM) / spanM) * (sw - sL - sR);
+    const sy = (s) => sh - sB - ((s - minS) / spanS) * (sh - sT - sB);
+
+    const avgChunkM = chunks.reduce((a, c) => a + c.mean, 0) / chunks.length;
+    const avgChunkS = chunks.reduce((a, c) => a + c.sd, 0) / chunks.length;
+
     const dots = chunks.map((c, idx) => {
-      const x = sp + ((c.mean - minM) / spanM) * (sw - sp * 2);
-      const y = sh - sp - ((c.sd - minS) / spanS) * (sh - sp * 2);
-      const op = (0.25 + (idx / (chunks.length - 1)) * 0.75).toFixed(2);
-      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${idx === chunks.length - 1 ? 4.5 : 3}" fill="var(--accent-color)" opacity="${op}"><title>${c.label}: ${formatTime(c.mean, 2)} avg • σ ${formatTime(c.sd, 2)}s</title></circle>`;
+      const cx = sx(c.mean).toFixed(1), cy = sy(c.sd).toFixed(1);
+      const isLast = idx === chunks.length - 1;
+      const op = (0.3 + (idx / (chunks.length - 1)) * 0.7).toFixed(2);
+      return `<circle class="chart-tip-target" cx="${cx}" cy="${cy}" r="${isLast ? 4.8 : 3.2}" fill="var(--accent-color)" opacity="${op}" stroke="${isLast ? "#fff" : "none"}" stroke-width="1.2" data-tip="${c.label}: ${formatTime(c.mean, dec)} avg • σ ${formatTime(c.sd, dec)}s" style="cursor:pointer"/>`;
     }).join("");
+
     scatterSvg = `
-      <svg viewBox="0 0 ${sw} ${sh}" width="100%" height="112">
-        <line x1="${sp}" y1="${sh - sp}" x2="${sw - sp}" y2="${sh - sp}" stroke="var(--border-strong)" stroke-width="1"/>
-        <line x1="${sp}" y1="${sp}" x2="${sp}" y2="${sh - sp}" stroke="var(--border-strong)" stroke-width="1"/>
-        <text x="${sp + 3}" y="${sh - 4}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">← Faster &amp; Steadier</text>
+      <svg viewBox="0 0 ${sw} ${sh}" width="100%" height="134">
+        <line x1="${sL}" y1="${sy(avgChunkS).toFixed(1)}" x2="${sw - sR}" y2="${sy(avgChunkS).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/>
+        <line x1="${sx(avgChunkM).toFixed(1)}" y1="${sT}" x2="${sx(avgChunkM).toFixed(1)}" y2="${sh - sB}" stroke="var(--border-color)" stroke-dasharray="3 3"/>
+        <line x1="${sL}" y1="${sh - sB}" x2="${sw - sR}" y2="${sh - sB}" stroke="var(--border-strong)"/>
+        <line x1="${sL}" y1="${sT}" x2="${sL}" y2="${sh - sB}" stroke="var(--border-strong)"/>
+        <text x="4" y="${sT + 6}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(maxS, 1)}σ</text>
+        <text x="4" y="${sh - sB}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(minS, 1)}σ</text>
+        <text x="${sL}" y="${sh - 6}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(minM, 1)}s</text>
+        <text x="${sw - sR - 26}" y="${sh - 6}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(maxM, 1)}s</text>
+        <text x="${sL + 4}" y="${sT + 8}" fill="var(--accent-color)" opacity="0.65" font-size="7" font-family="monospace">← Fast &amp; Steady (bottom-left)</text>
         ${dots}
       </svg>
     `;
   }
 
+  // 6. Compact Records & Averages Matrix at the Bottom
   const sorted = [...valid].sort((a, b) => a - b);
   const median = sorted[Math.floor(sorted.length / 2)];
   const iqr = sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.75)] - sorted[Math.floor(sorted.length * 0.25)] : null;
@@ -1397,36 +1461,82 @@ function renderAdvancedStats(eventSolves) {
   ];
 
   advStatsBody.innerHTML = `
+    <div id="adv-chart-tooltip" class="adv-chart-tooltip hidden"></div>
+
     <div class="charts-grid-2">
       <div class="chart-card">
-        <div class="chart-title-row"><span>Time Brackets</span><small>${valid.length} valid solves</small></div>
+        <div class="chart-title-row">
+          <span>Time Brackets</span>
+          <div style="display:flex; gap:0.25rem;">
+            <button class="btn-mini-pill ${advBracketStep === 5000 ? "active" : ""}" data-bstep="5000" type="button">5s</button>
+            <button class="btn-mini-pill ${advBracketStep === 2000 ? "active" : ""}" data-bstep="2000" type="button">2s</button>
+          </div>
+        </div>
         <div class="bracket-list">${bracketsHtml}</div>
       </div>
+
       <div class="chart-card">
         <div class="chart-title-row"><span>Improvement Trajectory</span><small>${slopeText}</small></div>
-        <svg viewBox="0 0 ${trajW} ${trajH}" width="100%" height="120" style="color:var(--accent-color)">
-          <polyline fill="none" stroke="currentColor" stroke-opacity="0.32" stroke-dasharray="4 3" stroke-width="1.4" points="${pbPoly}" />
+        <svg viewBox="0 0 ${trajW} ${trajH}" width="100%" height="134" style="color:var(--accent-color)">
+          <line x1="${tPadL}" y1="${ty(tMax).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMax).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/>
+          <line x1="${tPadL}" y1="${ty(tMid).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMid).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/>
+          <line x1="${tPadL}" y1="${ty(tMin).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMin).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/>
+          <polyline fill="none" stroke="currentColor" stroke-opacity="0.35" stroke-dasharray="4 3" stroke-width="1.4" points="${pbPoly}" />
           <polyline fill="none" stroke="currentColor" stroke-width="2" points="${rollPoly}" />
-          <text x="6" y="12" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMax, 1)}</text>
-          <text x="6" y="${trajH - 4}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMin, 1)}</text>
+          <text x="2" y="${ty(tMax) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMax, 1)}</text>
+          <text x="2" y="${ty(tMid) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMid, 1)}</text>
+          <text x="2" y="${ty(tMin) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMin, 1)}</text>
+          <text x="${tPadL}" y="${trajH - 4}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">#${validEntries[0].idx}</text>
+          <text x="${trajW - tPadR - 24}" y="${trajH - 4}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">#${validEntries[n - 1].idx}</text>
+          ${trajHits.join("")}
         </svg>
-        <small class="muted-text" style="font-size:0.7rem;">Solid = Rolling Ao${rollWin} • Dashed = Single PB Staircase</small>
+        <small class="muted-text" style="font-size:0.7rem;">Solid = Rolling Ao${rollWin} • Dashed = Single PB Staircase (hover to inspect)</small>
       </div>
     </div>
 
     <div class="charts-grid-3">
-      <div class="chart-card"><div class="chart-title-row"><span>Time of Day</span><small>Prime: ${bestTodName}</small></div><div class="tod-grid">${todHtml}</div></div>
-      <div class="chart-card"><div class="chart-title-row"><span>Performance Heatmap</span><small>${heatTitleNote}</small></div><div class="heatmap-grid">${heatmapHtml}</div></div>
-      <div class="chart-card"><div class="chart-title-row"><span>Speed vs Consistency</span><small>${chunkSize}-solve blocks</small></div>${scatterSvg}</div>
+      <div class="chart-card">
+        <div class="chart-title-row"><span>Hourly Volume &amp; Speed</span><small>Fastest: ${fastestHour ? `${fmtHr(fastestHour.hr)} (${formatTime(fastestHour.sum / fastestHour.count, 2)})` : "-"}</small></div>
+        <div class="tod-grid" style="grid-template-columns: repeat(${activeHours.length}, minmax(24px, 1fr))">${hourlyHtml}</div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title-row"><span>Daily Pace Matrix</span><small>${paceSubtitle}</small></div>
+        <div class="pace-grid">${paceTilesHtml}</div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-title-row"><span>Speed vs Consistency</span><small>${chunkSize}-solve blocks</small></div>
+        ${scatterSvg}
+      </div>
     </div>
 
     <div class="records-table-wrap">
       <table class="records-table">
         <thead><tr><th>Metric</th><th>Current</th><th>Best Ever</th><th>Details</th></tr></thead>
-        <tbody>${rows.map(([m, c, b, n]) => `<tr><td>${m}</td><td class="num">${c}</td><td class="num">${b}</td><td style="color:var(--text-secondary)">${n}</td></tr>`).join("")}</tbody>
+        <tbody>${rows.map(([m, c, b, note]) => `<tr><td>${m}</td><td class="num">${c}</td><td class="num">${b}</td><td style="color:var(--text-secondary)">${note}</td></tr>`).join("")}</tbody>
       </table>
     </div>
   `;
+
+  advStatsBody.querySelectorAll("[data-bstep]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      advBracketStep = Number(btn.dataset.bstep);
+      renderAdvancedStats(eventSolves);
+    });
+  });
+
+  const tipEl = $("adv-chart-tooltip");
+  advStatsBody.querySelectorAll(".chart-tip-target").forEach((el) => {
+    el.addEventListener("pointerenter", (e) => {
+      tipEl.textContent = el.dataset.tip;
+      tipEl.classList.remove("hidden");
+      const rect = advStatsDrawer.getBoundingClientRect();
+      tipEl.style.left = `${Math.min(rect.width - 140, Math.max(120, e.clientX - rect.left))}px`;
+      tipEl.style.top = `${Math.max(48, e.clientY - rect.top - 14)}px`;
+    });
+    el.addEventListener("pointerleave", () => tipEl.classList.add("hidden"));
+  });
 }
 
 function renderGoal(ao5) {
