@@ -1168,35 +1168,41 @@ function renderSparkline(eventSolves) {
   }
 
   let series;
-  if (settings.trendFlatten && data.length >= 8) {
-    // Group solves into max 24 smoothed average points
-    const buckets = Math.min(24, Math.max(8, Math.floor(data.length / 2)));
-    const step = data.length / buckets;
+  if (settings.trendFlatten) {
+    // Break the entire session into 4 equal macro sections (or fewer if under 4 solves)
+    const numSections = Math.min(4, data.length);
+    const bSize = data.length / numSections;
     series = [];
-    for (let b = 0; b < buckets; b++) {
-      const sIdx = Math.round(b * step);
-      const eIdx = Math.min(data.length, Math.round((b + 1) * step));
+
+    for (let b = 0; b < numSections; b++) {
+      const sIdx = Math.round(b * bSize);
+      const eIdx = Math.min(data.length, Math.round((b + 1) * bSize));
       const slice = data.slice(sIdx, Math.max(sIdx + 1, eIdx));
       const avg = slice.reduce((acc, x) => acc + x.ms, 0) / slice.length;
+      const firstNum = slice[0].num;
+      const lastNum = slice[slice.length - 1].num;
+
       series.push({
-        num: `${slice[0].num}–${slice[slice.length - 1].num}`,
+        num: `Part ${b + 1} (#${firstNum}–${lastNum})`,
         plotMs: avg,
         label: `${formatTime(avg, settings.decimals)} avg`,
       });
     }
   } else {
-    series = data.map((d) => ({ num: String(d.num), plotMs: d.ms, label: d.label }));
+    series = data.map((d) => ({ num: `#${d.num}`, plotMs: d.ms, label: d.label }));
   }
 
   const rawMin = Math.min(...series.map((s) => s.plotMs));
   const rawMax = Math.max(...series.map((s) => s.plotMs));
   const baseSpan = Math.max(200, rawMax - rawMin);
-  const padMs = settings.trendFlatten ? baseSpan * 0.2 : 0;
+
+  // Generous padding in Flatten mode so the line stays in the readable center band
+  const padMs = settings.trendFlatten ? Math.max(800, baseSpan * 0.35) : 0;
   const min = Math.max(0, rawMin - padMs);
   const max = rawMax + padMs;
   const span = Math.max(1, max - min);
 
-  const w = 260, h = 98, pad = 12;
+  const w = 260, h = 98, pad = 16;
   const clampY = (ms) => Math.max(pad, Math.min(h - pad, h - pad - ((ms - min) / span) * (h - pad * 2)));
 
   const coords = series.map((d, i) => ({
@@ -1207,22 +1213,39 @@ function renderSparkline(eventSolves) {
 
   const poly = coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
 
-  const showDots = coords.length <= 30;
+  // Linear best-fit line across the 4 sections
+  let trendLineSvg = "";
+  if (settings.trendFlatten && coords.length >= 3) {
+    const n = coords.length;
+    const sumX = (n * (n - 1)) / 2;
+    const sumXX = (n * (n - 1) * (2 * n - 1)) / 6;
+    const sumY = coords.reduce((a, c) => a + c.plotMs, 0);
+    const sumXY = coords.reduce((a, c, i) => a + i * c.plotMs, 0);
+    const slope = (n * sumXX - sumX * sumX) ? (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX) : 0;
+    const intercept = (sumY - slope * sumX) / n;
+    const y0 = clampY(intercept);
+    const y1 = clampY(intercept + slope * (n - 1));
+
+    trendLineSvg = `<line x1="${coords[0].x.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${coords[n - 1].x.toFixed(1)}" y2="${y1.toFixed(1)}" stroke="currentColor" stroke-opacity="0.3" stroke-dasharray="4 3" stroke-width="1.4" />`;
+  }
+
+  const dotRadius = settings.trendFlatten ? 3.5 : (coords.length <= 40 ? 2.2 : 0);
   const dots = coords.map((c) => `
-    ${showDots ? `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="2.2" fill="currentColor" opacity="0.9" />` : ""}
-    <circle class="spark-hit" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="9" fill="transparent"
-      data-num="${c.num}" data-label="${c.label}" data-x="${(c.x / w) * 100}" data-y="${(c.y / h) * 100}" style="cursor:pointer;" />
+    ${dotRadius > 0 ? `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${dotRadius}" fill="currentColor" stroke="var(--card-bg-rgba)" stroke-width="1.2" opacity="0.95" />` : ""}
+    <circle class="spark-hit" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="11" fill="transparent"
+      data-tip="${c.num} • ${c.label}" data-x="${(c.x / w) * 100}" data-y="${(c.y / h) * 100}" style="cursor:pointer;" />
   `).join("");
 
   const scaleLabels = settings.trendFlatten
-    ? `<text x="6" y="11" fill="currentColor" opacity="0.5" font-size="8" font-family="monospace">${formatTime(rawMax, 1)}</text>
-       <text x="6" y="${h - 3}" fill="currentColor" opacity="0.5" font-size="8" font-family="monospace">${formatTime(rawMin, 1)}</text>`
+    ? `<text x="6" y="11" fill="currentColor" opacity="0.45" font-size="8" font-family="monospace">${formatTime(rawMax, 1)}</text>
+       <text x="6" y="${h - 3}" fill="currentColor" opacity="0.45" font-size="8" font-family="monospace">${formatTime(rawMin, 1)}</text>`
     : "";
 
   sparklineWrap.innerHTML = `
     <svg viewBox="0 0 ${w} ${h}" width="100%" height="100%" style="color: var(--accent-color)">
       ${scaleLabels}
-      <polyline fill="none" stroke="currentColor" stroke-width="1.8" stroke-opacity="0.9" stroke-linejoin="round" points="${poly}" />
+      ${trendLineSvg}
+      <polyline fill="none" stroke="currentColor" stroke-width="${settings.trendFlatten ? 2.2 : 1.8}" stroke-opacity="0.95" stroke-linejoin="round" stroke-linecap="round" points="${poly}" />
       ${dots}
     </svg>
     <div id="sparkline-tooltip" class="sparkline-tooltip hidden"></div>
@@ -1231,9 +1254,9 @@ function renderSparkline(eventSolves) {
   const tip = $("sparkline-tooltip");
   sparklineWrap.querySelectorAll(".spark-hit").forEach((hit) => {
     hit.addEventListener("pointerenter", () => {
-      tip.textContent = `#${hit.dataset.num} • ${hit.dataset.label}`;
-      tip.style.left = `${Math.min(78, Math.max(22, Number(hit.dataset.x)))}%`;
-      tip.style.top = `${Math.max(18, Number(hit.dataset.y))}%`;
+      tip.textContent = hit.dataset.tip;
+      tip.style.left = `${Math.min(76, Math.max(24, Number(hit.dataset.x)))}%`;
+      tip.style.top = `${Math.max(16, Number(hit.dataset.y))}%`;
       tip.classList.remove("hidden");
     });
     hit.addEventListener("pointerleave", () => tip.classList.add("hidden"));
