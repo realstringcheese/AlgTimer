@@ -735,3 +735,9 @@ export function initTrainer(context) {
     renderPracticeAlgStats(); renderImprovementView();
   });
 }
+
+export function reloadTrainerReps() {
+  try { algReps = JSON.parse(localStorage.getItem(STORAGE_ALG_REPS_KEY)) || {}; } catch { algReps = {}; }
+  renderPracticeAlgStats();
+  renderImprovementView();
+}

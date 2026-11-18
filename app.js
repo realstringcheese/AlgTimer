@@ -1,5 +1,6 @@
 import { EVENT_TO_PUZZLE, CSTIMER_EVENT_MAP, PREMADE_SCENES, QUICK_MOODS, COLOR_PRESETS, SCENE_PRESETS } from "./data.js";
-import { initTrainer, syncMethodViews, onTrainerTabVisible, renderImprovementView, handleImprovementKeyDown, handleImprovementKeyUp, handleImprovementPointerUp } from "./trainer.js";
+import { initTrainer, syncMethodViews, onTrainerTabVisible, renderImprovementView, handleImprovementKeyDown, handleImprovementKeyUp, handleImprovementPointerUp, reloadTrainerReps } from "./trainer.js";
+import { initCloud, signInGoogle, signOutGoogle, scheduleCloudPush } from "./cloud.js";
 
 // === SECTION A1: STORAGE KEYS & DEFAULTS ===
 let randomScrambleForEvent = null;
@@ -128,6 +129,7 @@ async function init() {
     getSettings: () => settings,
     getSolves: () => solves,
     getActiveTab: () => activeTab,
+    onRepsChanged: pushAllToCloud,
     formatTime, getEffectiveMs, showToast, switchTab, showTooltip, hideTooltip,
   });
 
@@ -143,6 +145,63 @@ async function init() {
   drawColorWheel();
   syncMethodViews();
   renderAll();
+
+  initCloud((user, info) => {
+  const inBtn = $("google-signin-btn"), outBtn = $("google-signout-btn");
+  if (user) {
+    $("cloud-status-title").textContent = user.displayName || user.email;
+    $("cloud-status-sub").textContent = "Auto-syncing solves, alg drills & theme";
+    inBtn.classList.add("hidden"); outBtn.classList.remove("hidden");
+    if (user.photoURL) $("profile-avatar").innerHTML = `<img src="${user.photoURL}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+
+    if (info?.cloudData) {
+      const cloudSolves = Array.isArray(info.cloudData.solves) ? info.cloudData.solves : [];
+      const seen = new Set(solves.map((s) => s.id));
+      cloudSolves.forEach((cs) => { if (!seen.has(cs.id)) { solves.push(cs); seen.add(cs.id); } });
+      solves.sort((a, b) => a.createdAt - b.createdAt);
+      localStorage.setItem(STORAGE_SOLVES_KEY, JSON.stringify(solves));
+
+      if (info.cloudData.algReps) {
+        const localReps = JSON.parse(localStorage.getItem("algtimer_alg_reps_v1") || "{}");
+        for (const [k, arr] of Object.entries(info.cloudData.algReps)) {
+          const cur = localReps[k] || [];
+          const seenR = new Set(cur.map((r) => r.createdAt));
+          arr.forEach((r) => { if (!seenR.has(r.createdAt)) cur.push(r); });
+          localReps[k] = cur.sort((a, b) => a.createdAt - b.createdAt);
+        }
+        localStorage.setItem("algtimer_alg_reps_v1", JSON.stringify(localReps));
+        reloadTrainerReps();
+      }
+
+      if (!localStorage.getItem(STORAGE_THEME_KEY) && info.cloudData.theme) {
+        activeTheme = { ...DEFAULT_THEME, ...info.cloudData.theme };
+        localStorage.setItem(STORAGE_THEME_KEY, JSON.stringify(activeTheme));
+        applyThemeToDOM(activeTheme, uploadedBgDataUrl);
+      }
+      if (!localStorage.getItem(STORAGE_SETTINGS_KEY) && info.cloudData.settings) {
+        settings = { ...DEFAULT_SETTINGS, ...info.cloudData.settings };
+        localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(settings));
+        applySettingsToUI();
+        syncMethodViews();
+      }
+      renderAll();
+    }
+    pushAllToCloud();
+  } else {
+    $("cloud-status-title").textContent = info?.configured ? "Signed Out" : "Cloud Sync (Setup Needed)";
+    $("cloud-status-sub").textContent = info?.configured ? "Sign in to sync across devices" : "Check cloud.js";
+    inBtn.classList.remove("hidden"); outBtn.classList.add("hidden");
+    $("profile-avatar").textContent = (settings.profileName[0] || "C").toUpperCase();
+  }
+});
+
+$("google-signin-btn").addEventListener("click", async () => {
+  try {
+    const res = await signInGoogle();
+    if (res?.error) showToast(res.error);
+  } catch { showToast("Sign-in cancelled or blocked."); }
+});
+$("google-signout-btn").addEventListener("click", () => signOutGoogle());
 
   uploadedBgDataUrl = await loadUploadedBg();
   if (uploadedBgDataUrl) applyThemeToDOM(activeTheme, uploadedBgDataUrl);
@@ -885,8 +944,16 @@ $("setting-timer-size").addEventListener("input", () => updateSetting("timerSize
 $("setting-scramble-size").addEventListener("input", () => updateSetting("scrambleSize", Number($("setting-scramble-size").value)));
 $("setting-sidebar-width").addEventListener("input", () => updateSetting("sidebarWidth", Number($("setting-sidebar-width").value)));
 
-function saveSolves() { localStorage.setItem(STORAGE_SOLVES_KEY, JSON.stringify(solves)); }
-function saveSettings() { localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(settings)); }
+function pushAllToCloud() {
+  scheduleCloudPush(() => ({
+    solves,
+    settings,
+    theme: activeTheme,
+    algReps: JSON.parse(localStorage.getItem("algtimer_alg_reps_v1") || "{}"),
+  }));
+}
+function saveSolves() { localStorage.setItem(STORAGE_SOLVES_KEY, JSON.stringify(solves)); pushAllToCloud(); }
+function saveSettings() { localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(settings)); pushAllToCloud(); }
 function loadArray(k) { try { const p = JSON.parse(localStorage.getItem(k)); return Array.isArray(p) ? p : []; } catch { return []; } }
 function loadJSON(k, fb, merge = false) { try { const p = JSON.parse(localStorage.getItem(k)); return p && typeof p === "object" && !Array.isArray(p) ? (merge ? { ...fb, ...p } : p) : fb; } catch { return fb; } }
 

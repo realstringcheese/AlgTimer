@@ -447,6 +447,16 @@
     <div class="modal-card">
       <div class="modal-header"><h2>Cuber Profile</h2><button id="close-profile-btn" class="btn-icon" type="button">✕</button></div>
       <div class="modal-body">
+        <div id="cloud-auth-box" class="toggle-card" style="flex-direction:column; align-items:stretch; gap:0.6rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem;">
+            <div>
+              <strong id="cloud-status-title">Cloud Sync (Off)</strong>
+              <small id="cloud-status-sub">Sign in to save solves &amp; alg drills across devices</small>
+            </div>
+            <button id="google-signin-btn" class="btn-primary" type="button">Sign in with Google</button>
+            <button id="google-signout-btn" class="btn-outline hidden" type="button">Sign Out</button>
+          </div>
+        </div>
         <label class="field"><span>Display Name</span><input id="profile-name-input" class="input-text" type="text" maxlength="20" /></label>
         <label class="field"><span>Main Method (Syncs Guide &amp; Algs)</span><select id="profile-method-select" class="select"><option value="CFOP">CFOP</option><option value="Roux">Roux</option><option value="ZZ">ZZ</option><option value="Beginner">Beginner Layer-by-Layer</option></select></label>
         <button id="save-profile-btn" class="btn-primary full-width" type="button">Save Profile</button>
