@@ -92,8 +92,17 @@
       <aside class="left-sidebar">
         <div class="panel-card">
           <div class="panel-header">
-            <span>Scramble Preview</span>
-            <span id="preview-mode-badge">3D</span>
+            <span>Session Trend</span>
+            <div style="display:flex; align-items:center; gap:0.35rem;">
+              <button id="trend-flatten-btn" class="btn-mini-pill" type="button" title="Smooth spikes &amp; clamp outliers to see real trends">Flatten</button>
+              <select id="trend-range-select" class="select-mini" aria-label="Trend Solve Range">
+                <option value="12">Last 12</option>
+                <option value="25" selected>Last 25</option>
+                <option value="50">Last 50</option>
+                <option value="100">Last 100</option>
+                <option value="all">All</option>
+              </select>
+            </div>
           </div>
           <div class="preview-box">
             <twisty-player
@@ -150,6 +159,7 @@
             <span id="scramble-status" class="scramble-status"></span>
             <button id="new-scramble-btn" class="btn-outline" type="button">New Scramble</button>
             <button id="copy-scramble-btn" class="btn-outline" type="button">Copy</button>
+            <button id="insp-toggle-pill" class="btn-outline" type="button" title="Toggle WCA 15s Inspection">Insp: Off</button>
           </div>
         </div>
 
@@ -576,6 +586,28 @@
                 <button class="seg-btn active" data-dec="2" type="button">0.00</button>
                 <button class="seg-btn" data-dec="3" type="button">0.000</button>
               </div>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>WCA 15s Inspection</span>
+                <small>Tap space/click to inspect, hold to ready (+2 at 15s, DNF at 17s)</small>
+              </div>
+              <label class="switch">
+                <input id="setting-inspection" type="checkbox" />
+                <span class="switch-track"></span>
+              </label>
+            </div>
+
+            <div class="setting-row">
+              <div class="setting-label">
+                <span>Inspection Sound Alerts</span>
+                <small>8s warning beep &amp; 12s double-beep during inspection</small>
+              </div>
+              <label class="switch">
+                <input id="setting-inspection-audio" type="checkbox" />
+                <span class="switch-track"></span>
+              </label>
             </div>
 
             <div class="setting-row">

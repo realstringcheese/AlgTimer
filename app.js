@@ -41,6 +41,7 @@ const DEFAULT_SETTINGS = {
   event: "333", holdDelayMs: 300, decimals: 2, focusMode: true, focusBgBehavior: "blur",
   timerSize: 9.5, scrambleSize: 1.5, sidebarWidth: 320, goalMs: 15000,
   previewDim: "3D", trendRange: "25", profileName: "Cuber", profileMethod: "CFOP",
+  inspection: false, inspectionAudio: true, trendFlatten: false,
 };
 
 // === SECTION A2: STATE & DOM REFERENCES ===
@@ -224,6 +225,11 @@ const scrambleSizeInput = $("setting-scramble-size");
 const scrambleSizeValue = $("scramble-size-value");
 const sidebarWidthInput = $("setting-sidebar-width");
 const sidebarWidthValue = $("sidebar-width-value");
+
+const trendFlattenBtn = $("trend-flatten-btn");
+const inspTogglePill = $("insp-toggle-pill");
+const inspEnabledInput = $("setting-inspection");
+const inspAudioInput = $("setting-inspection-audio");
 
 const profileBtn = $("profile-btn");
 const profileModal = $("profile-modal");
@@ -667,7 +673,32 @@ saveCustomPresetBtn.addEventListener("click", () => {
   draftTheme.presetId = id; renderPresets(); showToast(`Saved preset "${name.trim()}"`);
 });
 
-// === SECTION A6: SCRAMBLES, 3D PREVIEW & TIMER STATE MACHINE ===
+// === SECTION A6: SCRAMBLES, 3D PREVIEW, 15s INSPECTION & TIMER ===
+let inspStartTime = null;
+let inspIntervalId = null;
+let inspWarned8 = false;
+let inspWarned12 = false;
+let pendingPenalty = null;
+let armingInspTrigger = null;
+
+function playBeep(freq = 880, duration = 0.09) {
+  if (!settings.inspectionAudio) return;
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + duration);
+    setTimeout(() => ctx.close(), 350);
+  } catch {}
+}
+
 function localFallbackScramble(eventId) {
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
   const mods = ["", "'", "2"];
@@ -749,20 +780,103 @@ resetCamBtn.addEventListener("click", () => { resetCamBtn.blur(); try { scramble
 function setTimerState(nextState) {
   timerState = nextState;
   timerZone.dataset.state = nextState;
-  if (nextState === "running" && settings.focusMode) {
+  if (nextState !== "inspecting") delete timerZone.dataset.inspWarn;
+
+  const hideUI = (nextState === "running" || nextState === "inspecting") && settings.focusMode;
+  if (hideUI) {
     appEl.classList.add("is-running"); document.body.classList.add("is-solving");
     advStatsOpen = false; advStatsDrawer.classList.add("hidden");
   } else {
     appEl.classList.remove("is-running"); document.body.classList.remove("is-solving");
   }
-  if (nextState === "idle") timerHintText.textContent = "Hold SPACE or CLICK to ready";
-  else if (nextState === "holding") { timerDisplay.textContent = formatTime(0, settings.decimals); timerHintText.textContent = settings.holdDelayMs > 0 ? "Keep holding..." : "Release to start"; }
-  else if (nextState === "ready") { timerDisplay.textContent = formatTime(0, settings.decimals); timerHintText.textContent = "Release to start"; }
-  else if (nextState === "running") timerHintText.textContent = "Running";
+
+  if (nextState === "idle") {
+    timerHintText.textContent = settings.inspection ? "Tap SPACE or CLICK to inspect (15s)" : "Hold SPACE or CLICK to ready";
+  } else if (nextState === "inspecting") {
+    timerHintText.textContent = "Inspecting • Hold SPACE/CLICK to start (ESC cancels)";
+  } else if (nextState === "holding") {
+    timerDisplay.textContent = formatTime(0, settings.decimals);
+    timerHintText.textContent = settings.holdDelayMs > 0 ? "Keep holding..." : "Release to start";
+  } else if (nextState === "ready") {
+    timerDisplay.textContent = formatTime(0, settings.decimals);
+    timerHintText.textContent = "Release to start";
+  } else if (nextState === "running") {
+    timerHintText.textContent = "Running";
+  }
+}
+
+function startInspection() {
+  clearInterval(inspIntervalId);
+  inspStartTime = performance.now();
+  inspWarned8 = false;
+  inspWarned12 = false;
+  pendingPenalty = null;
+  pbBanner.classList.add("hidden");
+  lastSolveActions.classList.add("hidden");
+  setTimerState("inspecting");
+  updateInspectionDisplay();
+
+  inspIntervalId = setInterval(() => {
+    if (inspStartTime === null) return;
+    const elapsed = performance.now() - inspStartTime;
+
+    if (elapsed >= 8000 && !inspWarned8) {
+      inspWarned8 = true;
+      playBeep(880, 0.08);
+    }
+    if (elapsed >= 12000 && !inspWarned12) {
+      inspWarned12 = true;
+      playBeep(1046, 0.09);
+      setTimeout(() => playBeep(1046, 0.09), 130);
+    }
+    if (elapsed >= 17000 && timerState === "inspecting") {
+      // Inspection expired -> WCA DNF
+      clearInterval(inspIntervalId);
+      inspIntervalId = null;
+      inspStartTime = null;
+      playBeep(220, 0.22);
+      const solve = {
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
+        event: settings.event, rawMs: 1, penalty: "DNF", scramble: currentScramble, createdAt: Date.now(),
+      };
+      solves.push(solve);
+      saveSolves();
+      setTimerState("idle");
+      renderAll();
+      showToast("Inspection exceeded 17s — DNF recorded");
+      loadNextScramble(settings.event);
+      return;
+    }
+    if (timerState === "inspecting") updateInspectionDisplay();
+  }, 50);
+}
+
+function updateInspectionDisplay() {
+  if (inspStartTime === null) return;
+  const elapsed = performance.now() - inspStartTime;
+  if (elapsed < 15000) {
+    const rem = Math.ceil((15000 - elapsed) / 1000);
+    timerDisplay.textContent = String(rem);
+    if (elapsed >= 12000) timerZone.dataset.inspWarn = "12";
+    else delete timerZone.dataset.inspWarn;
+  } else {
+    timerDisplay.textContent = "+2";
+    timerZone.dataset.inspWarn = "plus2";
+  }
+}
+
+function cancelInspection() {
+  clearInterval(inspIntervalId);
+  inspIntervalId = null;
+  inspStartTime = null;
+  pendingPenalty = null;
+  armingInspTrigger = null;
+  setTimerState("idle");
+  renderAll();
 }
 
 function beginHold(trigger) {
-  if (timerState !== "idle") return;
+  if (timerState !== "idle" && timerState !== "inspecting") return;
   activeTrigger = trigger; clearTimeout(holdTimeoutId);
   pbBanner.classList.add("hidden");
   if (settings.holdDelayMs <= 0) { setTimerState("ready"); return; }
@@ -770,11 +884,31 @@ function beginHold(trigger) {
   holdTimeoutId = setTimeout(() => { if (timerState === "holding") setTimerState("ready"); }, settings.holdDelayMs);
 }
 
-function cancelHold() { clearTimeout(holdTimeoutId); holdTimeoutId = null; activeTrigger = null; setTimerState("idle"); renderAll(); }
+function cancelHold() {
+  clearTimeout(holdTimeoutId); holdTimeoutId = null; activeTrigger = null;
+  if (inspStartTime !== null) {
+    setTimerState("inspecting");
+    updateInspectionDisplay();
+  } else {
+    setTimerState("idle");
+    renderAll();
+  }
+}
 
 function startTimer() {
   clearTimeout(holdTimeoutId); holdTimeoutId = null; activeTrigger = null;
-  startTime = performance.now(); setTimerState("running"); lastSolveActions.classList.add("hidden");
+
+  if (inspStartTime !== null) {
+    const inspElapsed = performance.now() - inspStartTime;
+    clearInterval(inspIntervalId); inspIntervalId = null; inspStartTime = null;
+    pendingPenalty = inspElapsed > 17000 ? "DNF" : inspElapsed > 15000 ? "+2" : null;
+  } else {
+    pendingPenalty = null;
+  }
+
+  startTime = performance.now();
+  setTimerState("running");
+  lastSolveActions.classList.add("hidden");
   const tick = () => {
     if (timerState !== "running") return;
     timerDisplay.textContent = formatTime(performance.now() - startTime, settings.decimals);
@@ -792,8 +926,9 @@ function stopTimer(stopTrigger) {
   const prevEventSolves = getCurrentEventSolves();
   const solve = {
     id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
-    event: settings.event, rawMs: elapsedMs, penalty: null, scramble: currentScramble, createdAt: Date.now(),
+    event: settings.event, rawMs: elapsedMs, penalty: pendingPenalty, scramble: currentScramble, createdAt: Date.now(),
   };
+  pendingPenalty = null;
 
   solves.push(solve);
   saveSolves();
@@ -813,21 +948,40 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (activeTab !== "timer") return;
+
+  if (e.key === "Escape" && (timerState === "inspecting" || timerState === "holding" || timerState === "ready")) {
+    clearTimeout(holdTimeoutId); holdTimeoutId = null; activeTrigger = null;
+    cancelInspection();
+    return;
+  }
+
   if (e.code === "Space") {
     e.preventDefault();
     if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
     if (e.repeat) return;
-    if (timerState === "idle") beginHold("space");
-    else if (timerState === "running") stopTimer("space");
+
+    if (timerState === "idle") {
+      if (settings.inspection) armingInspTrigger = "space";
+      else beginHold("space");
+    } else if (timerState === "inspecting") {
+      beginHold("space");
+    } else if (timerState === "running") {
+      stopTimer("space");
+    }
   }
 });
+
 window.addEventListener("keyup", (e) => {
   if (e.code !== "Space" || activeTab !== "timer") return;
   e.preventDefault();
-  if (timerState === "holding" && activeTrigger === "space") cancelHold();
+  if (armingInspTrigger === "space" && timerState === "idle") {
+    armingInspTrigger = null;
+    startInspection();
+  } else if (timerState === "holding" && activeTrigger === "space") cancelHold();
   else if (timerState === "ready" && activeTrigger === "space") startTimer();
   else if (timerState === "stopping" && activeTrigger === "space") finishStopCycle();
 });
+
 window.addEventListener("pointerdown", (e) => {
   if (timerState !== "running") return;
   if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -835,20 +989,43 @@ window.addEventListener("pointerdown", (e) => {
   suppressNextClick = true; setTimeout(() => (suppressNextClick = false), 100);
   stopTimer("pointer");
 }, { capture: true });
+
 window.addEventListener("click", (e) => { if (suppressNextClick) { e.preventDefault(); e.stopPropagation(); suppressNextClick = false; } }, { capture: true });
+
 timerZone.addEventListener("pointerdown", (e) => {
   if (isModalOpen() || activeTab !== "timer") return;
   if (e.pointerType === "mouse" && e.button !== 0) return;
   if (e.target.closest("button, select, input, a, .scramble-text, .adv-stats-drawer")) return;
-  if (timerState === "idle") { e.preventDefault(); beginHold("pointer"); }
+
+  if (timerState === "idle") {
+    e.preventDefault();
+    if (settings.inspection) armingInspTrigger = "pointer";
+    else beginHold("pointer");
+  } else if (timerState === "inspecting") {
+    e.preventDefault();
+    beginHold("pointer");
+  }
 });
+
 window.addEventListener("pointerup", () => {
-  if (timerState === "holding" && activeTrigger === "pointer") cancelHold();
+  if (armingInspTrigger === "pointer" && timerState === "idle") {
+    armingInspTrigger = null;
+    startInspection();
+  } else if (timerState === "holding" && activeTrigger === "pointer") cancelHold();
   else if (timerState === "ready" && activeTrigger === "pointer") startTimer();
   else if (timerState === "stopping" && activeTrigger === "pointer") finishStopCycle();
 });
-window.addEventListener("pointercancel", () => { if (timerState === "holding" || timerState === "ready") cancelHold(); else if (timerState === "stopping") finishStopCycle(); });
-window.addEventListener("blur", () => { if (timerState === "holding" || timerState === "ready") cancelHold(); else if (timerState === "stopping") finishStopCycle(); });
+
+window.addEventListener("pointercancel", () => {
+  armingInspTrigger = null;
+  if (timerState === "holding" || timerState === "ready") cancelHold();
+  else if (timerState === "stopping") finishStopCycle();
+});
+window.addEventListener("blur", () => {
+  armingInspTrigger = null;
+  if (timerState === "holding" || timerState === "ready") cancelHold();
+  else if (timerState === "stopping") finishStopCycle();
+});
 
 // === SECTION A7: PB CELEBRATION ENGINE ===
 function getBestRollingAvg(list, size, isMean = false) {
@@ -1326,6 +1503,19 @@ trendRangeSelect.addEventListener("change", () => {
   updateSetting("trendRange", trendRangeSelect.value);
   trendRangeSelect.blur();
 });
+
+trendFlattenBtn.addEventListener("click", () => {
+  trendFlattenBtn.blur();
+  updateSetting("trendFlatten", !settings.trendFlatten);
+});
+inspTogglePill.addEventListener("click", () => {
+  inspTogglePill.blur();
+  if (timerState !== "idle") return;
+  updateSetting("inspection", !settings.inspection);
+});
+inspEnabledInput.addEventListener("change", () => updateSetting("inspection", inspEnabledInput.checked));
+inspAudioInput.addEventListener("change", () => updateSetting("inspectionAudio", inspAudioInput.checked));
+
 newScrambleBtn.addEventListener("click", () => { newScrambleBtn.blur(); loadNextScramble(settings.event); });
 copyScrambleBtn.addEventListener("click", async () => {
   copyScrambleBtn.blur();
@@ -1482,6 +1672,12 @@ function applySettingsToUI() {
   sidebarWidthInput.value = settings.sidebarWidth; sidebarWidthValue.textContent = `${settings.sidebarWidth}px`;
   profileNameLabel.textContent = settings.profileName;
   profileAvatar.textContent = (settings.profileName[0] || "C").toUpperCase();
+  trendFlattenBtn.classList.toggle("active", Boolean(settings.trendFlatten));
+  inspEnabledInput.checked = Boolean(settings.inspection);
+  inspAudioInput.checked = Boolean(settings.inspectionAudio);
+  inspTogglePill.textContent = settings.inspection ? "Insp: 15s" : "Insp: Off";
+  inspTogglePill.classList.toggle("active", Boolean(settings.inspection));
+  if (timerState === "idle") setTimerState("idle");
 }
 
 function updateSetting(key, value) { settings[key] = value; saveSettings(); applySettingsToUI(); renderAll(); }
