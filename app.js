@@ -521,9 +521,6 @@ function setTimerState(next) {
   else if (next === "running") timerHintText.textContent = "Running";
 }
 
-$("adv-stats-drawer")?.addEventListener("pointerdown", (e) => e.stopPropagation());
-$("adv-stats-drawer")?.addEventListener("wheel", (e) => e.stopPropagation(), { passive: true });
-
 function startInspection() {
   clearInterval(inspIntervalId); inspStartTime = performance.now(); inspWarned8 = false; inspWarned12 = false; pendingPenalty = null;
   pbBanner.classList.add("hidden"); lastSolveActions.classList.add("hidden"); setTimerState("inspecting"); updateInspectionDisplay();
@@ -968,8 +965,21 @@ solveListEl.addEventListener("click", (e) => {
   if (btn) { e.stopPropagation(); if (btn.dataset.act === "+2") togglePenalty(id, "+2"); if (btn.dataset.act === "DNF") togglePenalty(id, "DNF"); if (btn.dataset.act === "del") deleteSolve(id); return; }
   openSolveModal(id);
 });
-advStatsToggle.addEventListener("click", () => { advStatsToggle.blur(); advStatsOpen = !advStatsOpen; if (advStatsOpen) renderAdvancedStats(getCurrentEventSolves()); advStatsDrawer.classList.toggle("hidden", !advStatsOpen); });
-closeAdvStatsBtn.addEventListener("click", () => { advStatsOpen = false; advStatsDrawer.classList.add("hidden"); });
+
+advStatsToggle.addEventListener("click", () => {
+  advStatsToggle.blur();
+  advStatsOpen = !advStatsOpen;
+  if (advStatsOpen) renderAdvancedStats(getCurrentEventSolves());
+  advStatsDrawer.classList.toggle("hidden", !advStatsOpen);
+});
+
+closeAdvStatsBtn.addEventListener("click", () => {
+  advStatsOpen = false;
+  advStatsDrawer.classList.add("hidden");
+});
+
+$("adv-stats-drawer")?.addEventListener("pointerdown", (e) => e.stopPropagation());
+$("adv-stats-drawer")?.addEventListener("wheel", (e) => e.stopPropagation(), { passive: true });
 
 // === SECTION A7: NAVIGATION, IMPORT/EXPORT, SETTINGS & PROFILE ===
 navTabs.forEach((btn) => btn.addEventListener("click", () => { if (timerState !== "running") { switchTab(btn.dataset.tab); btn.blur(); } }));
