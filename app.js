@@ -521,6 +521,9 @@ function setTimerState(next) {
   else if (next === "running") timerHintText.textContent = "Running";
 }
 
+$("adv-stats-drawer")?.addEventListener("pointerdown", (e) => e.stopPropagation());
+$("adv-stats-drawer")?.addEventListener("wheel", (e) => e.stopPropagation(), { passive: true });
+
 function startInspection() {
   clearInterval(inspIntervalId); inspStartTime = performance.now(); inspWarned8 = false; inspWarned12 = false; pendingPenalty = null;
   pbBanner.classList.add("hidden"); lastSolveActions.classList.add("hidden"); setTimerState("inspecting"); updateInspectionDisplay();
@@ -716,6 +719,8 @@ function renderSparkline(eventSolves) {
 
 let advStatsViewMode = "all"; // "all" | "table" | "charts"
 
+let advStatsViewMode = "all"; // "all" | "table" | "charts"
+
 function renderAdvancedStats(eventSolves) {
   const dec = settings.decimals;
   const validEntries = eventSolves
@@ -778,7 +783,7 @@ function renderAdvancedStats(eventSolves) {
   const n = valid.length, sX = (n * (n - 1)) / 2, sXX = (n * (n - 1) * (2 * n - 1)) / 6, sY = valid.reduce((a, b) => a + b, 0), sXY = valid.reduce((a, y, i) => a + i * y, 0);
   const slp10 = ((n * sXX - sX * sX) ? (n * sXY - sX * sY) / (n * sXX - sX * sX) : 0) * 10;
   const slopeText = slp10 <= -20 ? `↗ -${formatTime(Math.abs(slp10), 2)}s / 10` : slp10 >= 20 ? `↘ +${formatTime(slp10, 2)}s / 10` : "→ Steady";
-  const tMin = Math.min(...pbPts, ...rollPts), tMax = Math.max(...pbPts, ...rollPts), tSpan = Math.max(1, tMax - tMin), tMid = (tMin + tMax) / 2;
+  const tMin = Math.min(...pbPts, ...rollPts), tMax = Math.max(...pbPts, ...rollPts), tSpan = Math.max(1, tMax - tMin);
   const tx = (i) => tPadL + (i / (n - 1)) * (trajW - tPadL - tPadR);
   const ty = (v) => tPadT + (1 - (v - tMin) / tSpan) * (trajH - tPadT - tPadB);
 
@@ -851,6 +856,13 @@ function renderAdvancedStats(eventSolves) {
     ["Session Overall", fmt(mean), fmt(best), `Total Time: ${Math.floor(valid.reduce((a, b) => a + b, 0) / 60000)}m • Valid: ${valid.length}`],
   ];
 
+  const jumpHtml = `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:0.2rem 0.25rem;">
+      <span class="muted-text" style="font-size:0.75rem;">Showing charts &amp; records</span>
+      <button id="jump-to-table-btn" class="btn-text" type="button" style="color:var(--accent-color); font-weight:700; font-size:0.76rem;">↓ Jump to Records Table</button>
+    </div>
+  `;
+
   const chartsHtml = `
     <div class="charts-grid-2">
       <div class="chart-card"><div class="chart-title-row"><span>Time Brackets</span><small>${valid.length} valid</small></div><div class="bracket-list">${bracketsHtml}</div></div>
@@ -864,7 +876,7 @@ function renderAdvancedStats(eventSolves) {
   `;
 
   const tableHtml = `
-    <div class="records-table-wrap">
+    <div id="stats-records-table-card" class="records-table-wrap">
       <div class="panel-header" style="padding:0.75rem 1rem; border-bottom:1px solid var(--border-color);">
         <span>Session Records &amp; Rolling Averages</span>
         <span class="muted-text">${valid.length} solves calculated</span>
@@ -881,8 +893,13 @@ function renderAdvancedStats(eventSolves) {
   } else if (advStatsViewMode === "charts") {
     advStatsBody.innerHTML = chartsHtml;
   } else {
-    advStatsBody.innerHTML = chartsHtml + tableHtml;
+    advStatsBody.innerHTML = jumpHtml + chartsHtml + tableHtml;
   }
+
+  // Wire "Jump to Table" button in All mode
+  $("jump-to-table-btn")?.addEventListener("click", () => {
+    $("stats-records-table-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 
   // Hook view tabs (All / Records Table / Charts)
   const tabWrap = $("adv-view-tabs");

@@ -137,25 +137,25 @@ body.focus-dim.is-solving .bg-dim { opacity: 0.85; }
 .adv-stats-pill:hover { border-color: var(--accent-color); }
 
 .adv-stats-drawer {
-  position: absolute;
-  left: 1rem;
-  right: 1rem;
-  bottom: 0.85rem;
-  height: 78vh;
-  max-height: 78vh;
+  position: fixed;
+  left: calc(var(--sidebar-width) + 1rem);
+  right: calc(var(--sidebar-width) + 1rem);
+  top: 4.75rem;
+  bottom: 1rem;
   background: var(--sidebar-bg-rgba);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
   border: 1px solid var(--border-strong);
-  border-radius: calc(var(--radius) + 4px);
-  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.75);
+  border-radius: 14px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.85);
   display: flex;
   flex-direction: column;
-  z-index: 30;
+  z-index: 50;
   cursor: default;
   overflow: hidden;
   touch-action: auto !important;
-  user-select: text;
+  user-select: text !important;
+  pointer-events: auto !important;
 }
 
 .adv-stats-body {
@@ -165,10 +165,34 @@ body.focus-dim.is-solving .bg-dim { opacity: 0.85; }
   touch-action: pan-y !important;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding: 1rem 1.15rem 3rem; /* Extra padding so the bottom table is never cut off */
+  padding: 1rem 1.25rem 3.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
+  gap: 1.2rem;
+}
+
+.adv-stats-body::-webkit-scrollbar {
+  width: 8px;
+}
+.adv-stats-body::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 999px;
+}
+.adv-stats-body::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+.adv-stats-body::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-color);
+}
+
+@media (max-width: 1020px) {
+  .adv-stats-drawer {
+    left: 1rem !important;
+    right: 1rem !important;
+    top: 4.5rem !important;
+    bottom: 1rem !important;
+  }
 }
 
 /* Visible scrollbar so you know you can scroll */
