@@ -46,10 +46,10 @@ const DEFAULT_SETTINGS = {
 // === SECTION A2: STATE & DOM REFERENCES ===
 let settings = loadJSON(STORAGE_SETTINGS_KEY, DEFAULT_SETTINGS, true);
 let activeTheme = loadJSON(STORAGE_THEME_KEY, DEFAULT_THEME, true);
-let savedPresets = loadJSON(STORAGE_CUSTOM_PRESETS_KEY, []);
-let colorHistory = loadJSON(STORAGE_COLOR_HISTORY_KEY, []);
-let solves = loadJSON(STORAGE_SOLVES_KEY, []);
-let learnedAlgs = loadJSON(STORAGE_LEARNED_KEY, []);
+let savedPresets = loadArray(STORAGE_CUSTOM_PRESETS_KEY);
+let colorHistory = loadArray(STORAGE_COLOR_HISTORY_KEY);
+let solves = loadArray(STORAGE_SOLVES_KEY);
+let learnedAlgs = loadArray(STORAGE_LEARNED_KEY);
 
 let draftTheme = null;
 let uploadedBgDataUrl = null;
@@ -79,6 +79,7 @@ let currentScramble = "";
 let prefetchedScramble = null;
 let prefetchedEvent = null;
 let selectedSolveId = null;
+let scramblerLoadPromise = null;
 
 const $ = (id) => document.getElementById(id);
 const appEl = $("app");
@@ -218,7 +219,7 @@ const decimalsSeg = $("decimals-seg");
 const focusModeInput = $("setting-focus-mode");
 const focusBgSelect = $("setting-focus-bg");
 const timerSizeInput = $("setting-timer-size");
-const timerSizeValue = $("timer-size-value");
+const timerSizeValue = $("setting-timer-size-value") || $("timer-size-value");
 const scrambleSizeInput = $("setting-scramble-size");
 const scrambleSizeValue = $("scramble-size-value");
 const sidebarWidthInput = $("setting-sidebar-width");
@@ -243,6 +244,10 @@ const modalDnfBtn = $("modal-dnf-btn");
 const modalDelBtn = $("modal-del-btn");
 const toastEl = $("toast");
 
+window.addEventListener("error", (ev) => {
+  if (scrambleStatusEl) scrambleStatusEl.textContent = `App error: ${ev.message}`;
+});
+
 // === SECTION A3: INITIALIZATION & INDEXEDDB ===
 function openBgDB() {
   return new Promise((resolve, reject) => {
@@ -262,7 +267,10 @@ async function saveUploadedBg(dataUrl) {
 
 async function loadUploadedBg() {
   try {
-    const db = await openBgDB();
+    const db = await Promise.race([
+      openBgDB(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("IDB timeout")), 1000)),
+    ]);
     return await new Promise((resolve) => {
       const req = db.transaction("wallpapers", "readonly").objectStore("wallpapers").get("custom_bg");
       req.onsuccess = () => resolve(req.result || null);
@@ -270,15 +278,6 @@ async function loadUploadedBg() {
     });
   } catch { return null; }
 }
-
-function importWithTimeout(url, ms = 9000) {
-  return Promise.race([
-    import(url),
-    new Promise((_, reject) => setTimeout(() => reject(new Error("Network timeout")), ms)),
-  ]);
-}
-
-let scramblerLoadPromise = null;
 
 function importWithTimeout(url, ms = 8000) {
   return Promise.race([
@@ -308,7 +307,12 @@ function ensureScramblerLoaded() {
 }
 
 async function init() {
-  uploadedBgDataUrl = await loadUploadedBg();
+  // Show a scramble at 0ms immediately before touching IndexedDB or the network
+  currentScramble = localFallbackScramble(settings.event);
+  scrambleTextEl.textContent = currentScramble;
+  scrambleStatusEl.textContent = "Connecting WCA...";
+  previewModeBadge.textContent = "Loading...";
+
   eventSelect.value = settings.event;
   trendRangeSelect.value = settings.trendRange;
   applySettingsToUI();
@@ -317,13 +321,9 @@ async function init() {
   syncMethodViews();
   renderAll();
 
-  // Show an instant scramble immediately at 0ms
-  currentScramble = localFallbackScramble(settings.event);
-  scrambleTextEl.textContent = currentScramble;
-  scrambleStatusEl.textContent = "Connecting WCA...";
-  previewModeBadge.textContent = "Loading...";
+  uploadedBgDataUrl = await loadUploadedBg();
+  if (uploadedBgDataUrl) applyThemeToDOM(activeTheme, uploadedBgDataUrl);
 
-  // Upgrade to official WCA scrambles in the background
   ensureScramblerLoaded().then((ok) => {
     if (ok) {
       if (timerState === "idle") loadNextScramble(settings.event);
@@ -332,7 +332,6 @@ async function init() {
     }
   });
 
-  // Load 3D/2D cube preview in parallel
   importWithTimeout("https://cdn.cubing.net/v0/js/cubing/twisty", 12000)
     .then(() => updateScramblePreview())
     .catch((err) => {
@@ -669,29 +668,6 @@ saveCustomPresetBtn.addEventListener("click", () => {
 });
 
 // === SECTION A6: SCRAMBLES, 3D PREVIEW & TIMER STATE MACHINE ===
-
-function localFallbackScramble(eventId) {
-  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-  const mods = ["", "'", "2"];
-  const genMoves = (faces, len) => {
-    const out = [];
-    let last = "", prev2 = "";
-    for (let i = 0; i < len; i++) {
-      let f;
-      do { f = pick(faces); } while (f === last || (f[0] === last[0] && f === prev2));
-      prev2 = last; last = f;
-      out.push(f + pick(mods));
-    }
-    return out.join(" ");
-  };
-  if (eventId === "222") return genMoves(["U", "R", "F"], 9);
-  if (eventId === "444") return genMoves(["U", "D", "R", "L", "F", "B", "Uw", "Rw", "Fw"], 40);
-  if (eventId === "555") return genMoves(["U", "D", "R", "L", "F", "B", "Uw", "Dw", "Rw", "Lw", "Fw", "Bw"], 60);
-  if (eventId === "pyram") return genMoves(["U", "L", "R", "B"], 10);
-  if (eventId === "skewb") return genMoves(["U", "L", "R", "B"], 9);
-  return genMoves(["U", "D", "R", "L", "F", "B"], 20);
-}
-
 function localFallbackScramble(eventId) {
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
   const mods = ["", "'", "2"];
@@ -729,9 +705,7 @@ async function loadNextScramble(eventId) {
   try {
     let result;
     if (prefetchedScramble && prefetchedEvent === eventId) {
-      result = prefetchedScramble;
-      prefetchedScramble = null;
-      prefetchedEvent = null;
+      result = prefetchedScramble; prefetchedScramble = null; prefetchedEvent = null;
     } else {
       result = await generateScramble(eventId);
     }
@@ -753,10 +727,7 @@ async function loadNextScramble(eventId) {
 async function prefetchScramble(eventId) {
   try {
     const next = await generateScramble(eventId);
-    if (eventId === settings.event && !next.offline) {
-      prefetchedScramble = next;
-      prefetchedEvent = eventId;
-    }
+    if (eventId === settings.event && !next.offline) { prefetchedScramble = next; prefetchedEvent = eventId; }
   } catch {}
 }
 
@@ -1057,7 +1028,6 @@ function renderAdvancedStats(eventSolves) {
   const best = calculateBest(eventSolves);
   const worst = valid.length ? Math.max(...valid) : null;
 
-  // Median, Quartiles, StdDev
   const sorted = [...valid].sort((a, b) => a - b);
   const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : null;
   const q1 = sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.25)] : null;
@@ -1071,7 +1041,6 @@ function renderAdvancedStats(eventSolves) {
     consistency = Math.max(0, 100 - (stdDev / mean) * 100);
   }
 
-  // Sub-Goal % & Best Streak
   const subCount = valid.filter((t) => t <= settings.goalMs).length;
   const subPct = valid.length ? Math.round((subCount / valid.length) * 100) : 0;
   let curStreak = 0, bestStreak = 0;
@@ -1081,7 +1050,6 @@ function renderAdvancedStats(eventSolves) {
     else curStreak = 0;
   });
 
-  // Last 10 vs Prev 10 Trend
   let trendDeltaText = "-";
   if (valid.length >= 20) {
     const last10 = valid.slice(-10).reduce((a, b) => a + b, 0) / 10;
@@ -1117,15 +1085,11 @@ function renderAdvancedStats(eventSolves) {
     ["Goal Streak", `${bestStreak}`, `Current: ${curStreak}`],
   ];
 
-  // Build 6-bucket Histogram
   let histHtml = "";
   if (valid.length >= 3 && worst > best) {
     const bins = 6, step = (worst - best) / bins;
     const counts = Array(bins).fill(0);
-    valid.forEach((t) => {
-      const idx = Math.min(bins - 1, Math.floor((t - best) / step));
-      counts[idx]++;
-    });
+    valid.forEach((t) => { counts[Math.min(bins - 1, Math.floor((t - best) / step))]++; });
     const maxCount = Math.max(...counts, 1);
     histHtml = `
       <div class="hist-chart">
@@ -1531,10 +1495,18 @@ sidebarWidthInput.addEventListener("input", () => updateSetting("sidebarWidth", 
 
 function saveSolves() { localStorage.setItem(STORAGE_SOLVES_KEY, JSON.stringify(solves)); }
 function saveSettings() { localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(settings)); }
+function loadArray(key) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
 function loadJSON(key, fallback, merge = false) {
   try {
     const parsed = JSON.parse(localStorage.getItem(key));
-    if (!parsed) return fallback;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return fallback;
     return merge ? { ...fallback, ...parsed } : parsed;
   } catch { return fallback; }
 }
+
+init();
