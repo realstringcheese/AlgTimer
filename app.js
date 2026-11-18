@@ -39,9 +39,9 @@ const COLOR_SLOTS = [
 
 const DEFAULT_SETTINGS = {
   event: "333", holdDelayMs: 300, decimals: 2, focusMode: true, focusBgBehavior: "blur",
+  inspection: false, inspectionAudio: true, trendFlatten: false,
   timerSize: 9.5, scrambleSize: 1.5, sidebarWidth: 320, goalMs: 15000,
   previewDim: "3D", trendRange: "25", profileName: "Cuber", profileMethod: "CFOP",
-  inspection: false, inspectionAudio: true, trendFlatten: false,
 };
 
 // === SECTION A2: STATE & DOM REFERENCES ===
@@ -101,6 +101,7 @@ const scramblePlayer = $("scramble-player");
 const previewModeBadge = $("preview-mode-badge");
 const toggleDimBtn = $("toggle-dim-btn");
 const resetCamBtn = $("reset-cam-btn");
+const trendFlattenBtn = $("trend-flatten-btn");
 const trendRangeSelect = $("trend-range-select");
 const sparklineWrap = $("sparkline-wrap");
 const editGoalBtn = $("edit-goal-btn");
@@ -113,6 +114,7 @@ const scrambleTextEl = $("scramble-text");
 const scrambleStatusEl = $("scramble-status");
 const newScrambleBtn = $("new-scramble-btn");
 const copyScrambleBtn = $("copy-scramble-btn");
+const inspTogglePill = $("insp-toggle-pill");
 
 const timerZone = $("timer-zone");
 const timerCore = $("timer-core");
@@ -217,19 +219,16 @@ const closeSettingsBtn = $("close-settings-btn");
 const holdDelayInput = $("setting-hold-delay");
 const holdDelayValue = $("hold-delay-value");
 const decimalsSeg = $("decimals-seg");
+const inspEnabledInput = $("setting-inspection");
+const inspAudioInput = $("setting-inspection-audio");
 const focusModeInput = $("setting-focus-mode");
 const focusBgSelect = $("setting-focus-bg");
 const timerSizeInput = $("setting-timer-size");
-const timerSizeValue = $("setting-timer-size-value") || $("timer-size-value");
+const timerSizeValue = $("timer-size-value");
 const scrambleSizeInput = $("setting-scramble-size");
 const scrambleSizeValue = $("scramble-size-value");
 const sidebarWidthInput = $("setting-sidebar-width");
 const sidebarWidthValue = $("sidebar-width-value");
-
-const trendFlattenBtn = $("trend-flatten-btn");
-const inspTogglePill = $("insp-toggle-pill");
-const inspEnabledInput = $("setting-inspection");
-const inspAudioInput = $("setting-inspection-audio");
 
 const profileBtn = $("profile-btn");
 const profileModal = $("profile-modal");
@@ -313,37 +312,41 @@ function ensureScramblerLoaded() {
 }
 
 async function init() {
-  // Show a scramble at 0ms immediately before touching IndexedDB or the network
-  currentScramble = localFallbackScramble(settings.event);
-  scrambleTextEl.textContent = currentScramble;
-  scrambleStatusEl.textContent = "Connecting WCA...";
-  previewModeBadge.textContent = "Loading...";
+  try {
+    currentScramble = localFallbackScramble(settings.event);
+    scrambleTextEl.textContent = currentScramble;
+    scrambleStatusEl.textContent = "Connecting WCA...";
+    previewModeBadge.textContent = "Loading...";
 
-  eventSelect.value = settings.event;
-  trendRangeSelect.value = settings.trendRange;
-  applySettingsToUI();
-  applyThemeToDOM(activeTheme, uploadedBgDataUrl);
-  drawColorWheel();
-  syncMethodViews();
-  renderAll();
+    eventSelect.value = settings.event;
+    trendRangeSelect.value = settings.trendRange;
+    applySettingsToUI();
+    applyThemeToDOM(activeTheme, uploadedBgDataUrl);
+    drawColorWheel();
+    syncMethodViews();
+    renderAll();
 
-  uploadedBgDataUrl = await loadUploadedBg();
-  if (uploadedBgDataUrl) applyThemeToDOM(activeTheme, uploadedBgDataUrl);
+    uploadedBgDataUrl = await loadUploadedBg();
+    if (uploadedBgDataUrl) applyThemeToDOM(activeTheme, uploadedBgDataUrl);
 
-  ensureScramblerLoaded().then((ok) => {
-    if (ok) {
-      if (timerState === "idle") loadNextScramble(settings.event);
-    } else {
-      scrambleStatusEl.textContent = "Offline fallback (Wi-Fi)";
-    }
-  });
-
-  importWithTimeout("https://cdn.cubing.net/v0/js/cubing/twisty", 12000)
-    .then(() => updateScramblePreview())
-    .catch((err) => {
-      console.warn("3D preview offline:", err);
-      previewModeBadge.textContent = "Offline";
+    ensureScramblerLoaded().then((ok) => {
+      if (ok) {
+        if (timerState === "idle") loadNextScramble(settings.event);
+      } else {
+        scrambleStatusEl.textContent = "Offline fallback (Wi-Fi)";
+      }
     });
+
+    importWithTimeout("https://cdn.cubing.net/v0/js/cubing/twisty", 12000)
+      .then(() => updateScramblePreview())
+      .catch((err) => {
+        console.warn("3D preview offline:", err);
+        previewModeBadge.textContent = "Offline";
+      });
+  } catch (err) {
+    console.error("Init error:", err);
+    if (scrambleStatusEl) scrambleStatusEl.textContent = `Init error: ${err.message}`;
+  }
 }
 
 function showToast(msg) {
@@ -820,17 +823,13 @@ function startInspection() {
     if (inspStartTime === null) return;
     const elapsed = performance.now() - inspStartTime;
 
-    if (elapsed >= 8000 && !inspWarned8) {
-      inspWarned8 = true;
-      playBeep(880, 0.08);
-    }
+    if (elapsed >= 8000 && !inspWarned8) { inspWarned8 = true; playBeep(880, 0.08); }
     if (elapsed >= 12000 && !inspWarned12) {
       inspWarned12 = true;
       playBeep(1046, 0.09);
       setTimeout(() => playBeep(1046, 0.09), 130);
     }
     if (elapsed >= 17000 && timerState === "inspecting") {
-      // Inspection expired -> WCA DNF
       clearInterval(inspIntervalId);
       inspIntervalId = null;
       inspStartTime = null;
@@ -855,8 +854,7 @@ function updateInspectionDisplay() {
   if (inspStartTime === null) return;
   const elapsed = performance.now() - inspStartTime;
   if (elapsed < 15000) {
-    const rem = Math.ceil((15000 - elapsed) / 1000);
-    timerDisplay.textContent = String(rem);
+    timerDisplay.textContent = String(Math.ceil((15000 - elapsed) / 1000));
     if (elapsed >= 12000) timerZone.dataset.inspWarn = "12";
     else delete timerZone.dataset.inspWarn;
   } else {
@@ -897,7 +895,6 @@ function cancelHold() {
 
 function startTimer() {
   clearTimeout(holdTimeoutId); holdTimeoutId = null; activeTrigger = null;
-
   if (inspStartTime !== null) {
     const inspElapsed = performance.now() - inspStartTime;
     clearInterval(inspIntervalId); inspIntervalId = null; inspStartTime = null;
@@ -1109,7 +1106,7 @@ function launchConfetti() {
   requestAnimationFrame(step);
 }
 
-// === SECTION A8: STATS, INTERACTIVE TREND & ADVANCED STATS ===
+// === SECTION A8: STATS, INTERACTIVE TREND & VISUAL ANALYTICS ===
 const getEffectiveMs = (s) => s.penalty === "DNF" ? Infinity : s.penalty === "+2" ? s.rawMs + 2000 : s.rawMs;
 
 function formatTime(ms, decimals = 2) {
@@ -1158,26 +1155,56 @@ function renderSparkline(eventSolves) {
     return;
   }
 
-  const w = 260, h = 94, pad = 12;
-  const min = Math.min(...data.map((d) => d.ms)), max = Math.max(...data.map((d) => d.ms));
+  const series = data.map((d, i) => {
+    const win = data.slice(Math.max(0, i - 4), i + 1);
+    const avg = win.reduce((acc, x) => acc + x.ms, 0) / win.length;
+    return { ...d, plotMs: settings.trendFlatten ? avg : d.ms };
+  });
+
+  let min, max;
+  if (settings.trendFlatten && series.length >= 6) {
+    const sorted = [...series.map((s) => s.plotMs)].sort((a, b) => a - b);
+    min = sorted[Math.floor(sorted.length * 0.05)];
+    max = sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * 0.95) - 1)];
+    if (max <= min) { min = Math.min(...sorted); max = Math.max(...sorted); }
+  } else {
+    min = Math.min(...series.map((s) => s.plotMs));
+    max = Math.max(...series.map((s) => s.plotMs));
+  }
   const span = Math.max(1, max - min);
 
-  const coords = data.map((d, i) => ({
+  const w = 260, h = 98, pad = 12;
+  const clampY = (ms) => Math.max(pad, Math.min(h - pad, h - pad - ((ms - min) / span) * (h - pad * 2)));
+
+  const coords = series.map((d, i) => ({
     ...d,
-    x: pad + (i / (data.length - 1)) * (w - pad * 2),
-    y: h - pad - ((d.ms - min) / span) * (h - pad * 2),
+    x: pad + (i / (series.length - 1)) * (w - pad * 2),
+    y: clampY(d.plotMs),
+    rawY: clampY(d.ms),
   }));
 
   const poly = coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
+  const rawDots = settings.trendFlatten
+    ? coords.map((c) => `<circle cx="${c.x.toFixed(1)}" cy="${c.rawY.toFixed(1)}" r="1.4" fill="currentColor" opacity="0.22" />`).join("")
+    : "";
+
   const dots = coords.map((c) => `
-    <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${data.length > 60 ? 1.8 : 2.5}" fill="currentColor" opacity="0.9" />
+    <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${series.length > 60 ? 1.7 : 2.4}" fill="currentColor" opacity="0.92" />
     <circle class="spark-hit" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="9" fill="transparent"
-      data-num="${c.num}" data-label="${c.label}" data-x="${(c.x / w) * 100}" data-y="${(c.y / h) * 100}" style="cursor:pointer;" />
+      data-num="${c.num}" data-label="${settings.trendFlatten ? `${formatTime(c.plotMs, settings.decimals)} avg (${c.label})` : c.label}"
+      data-x="${(c.x / w) * 100}" data-y="${(c.y / h) * 100}" style="cursor:pointer;" />
   `).join("");
+
+  const scaleLabels = settings.trendFlatten
+    ? `<text x="6" y="12" fill="currentColor" opacity="0.45" font-size="8" font-family="monospace">${formatTime(max, 1)}</text>
+       <text x="6" y="${h - 4}" fill="currentColor" opacity="0.45" font-size="8" font-family="monospace">${formatTime(min, 1)}</text>`
+    : "";
 
   sparklineWrap.innerHTML = `
     <svg viewBox="0 0 ${w} ${h}" width="100%" height="100%" style="color: var(--accent-color)">
-      <polyline fill="none" stroke="currentColor" stroke-width="1.8" stroke-opacity="0.85" points="${poly}" />
+      ${scaleLabels}
+      ${rawDots}
+      <polyline fill="none" stroke="currentColor" stroke-width="1.9" stroke-opacity="0.9" points="${poly}" />
       ${dots}
     </svg>
     <div id="sparkline-tooltip" class="sparkline-tooltip hidden"></div>
@@ -1187,7 +1214,7 @@ function renderSparkline(eventSolves) {
   sparklineWrap.querySelectorAll(".spark-hit").forEach((hit) => {
     hit.addEventListener("pointerenter", () => {
       tip.textContent = `#${hit.dataset.num} • ${hit.dataset.label}`;
-      tip.style.left = `${Math.min(82, Math.max(18, Number(hit.dataset.x)))}%`;
+      tip.style.left = `${Math.min(78, Math.max(22, Number(hit.dataset.x)))}%`;
       tip.style.top = `${Math.max(18, Number(hit.dataset.y))}%`;
       tip.classList.remove("hidden");
     });
@@ -1197,98 +1224,208 @@ function renderSparkline(eventSolves) {
 
 function renderAdvancedStats(eventSolves) {
   const dec = settings.decimals;
-  const valid = eventSolves.map(getEffectiveMs).filter((t) => t !== Infinity);
+  const validEntries = eventSolves
+    .map((s, i) => ({ idx: i + 1, ms: getEffectiveMs(s), createdAt: s.createdAt }))
+    .filter((d) => d.ms !== Infinity);
+  const valid = validEntries.map((d) => d.ms);
   const dnfCount = eventSolves.filter((s) => s.penalty === "DNF").length;
   const plus2Count = eventSolves.filter((s) => s.penalty === "+2").length;
 
+  advStatsSubtitle.textContent = `${eventSolves.length} solves (${valid.length} valid, ${dnfCount} DNF, ${plus2Count} +2)`;
   const mean = calculateSessionMean(eventSolves);
   const best = calculateBest(eventSolves);
   const worst = valid.length ? Math.max(...valid) : null;
-
-  const sorted = [...valid].sort((a, b) => a - b);
-  const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : null;
-  const q1 = sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.25)] : null;
-  const q3 = sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.75)] : null;
-  const iqr = q1 !== null && q3 !== null ? q3 - q1 : null;
-
   let stdDev = null, consistency = null;
   if (valid.length >= 2 && mean !== null && mean !== Infinity) {
-    const variance = valid.reduce((acc, t) => acc + (t - mean) ** 2, 0) / valid.length;
-    stdDev = Math.sqrt(variance);
+    stdDev = Math.sqrt(valid.reduce((acc, t) => acc + (t - mean) ** 2, 0) / valid.length);
     consistency = Math.max(0, 100 - (stdDev / mean) * 100);
   }
+  advStatsTeaser.textContent = stdDev !== null ? `• σ ${formatTime(stdDev, dec)}s` : "";
 
-  const subCount = valid.filter((t) => t <= settings.goalMs).length;
-  const subPct = valid.length ? Math.round((subCount / valid.length) * 100) : 0;
-  let curStreak = 0, bestStreak = 0;
-  eventSolves.forEach((s) => {
-    const t = getEffectiveMs(s);
-    if (t <= settings.goalMs) { curStreak++; if (curStreak > bestStreak) bestStreak = curStreak; }
-    else curStreak = 0;
-  });
-
-  let trendDeltaText = "-";
-  if (valid.length >= 20) {
-    const last10 = valid.slice(-10).reduce((a, b) => a + b, 0) / 10;
-    const prev10 = valid.slice(-20, -10).reduce((a, b) => a + b, 0) / 10;
-    const diff = last10 - prev10;
-    trendDeltaText = `${diff <= 0 ? "-" : "+"}${formatTime(Math.abs(diff), dec)}s`;
+  if (valid.length < 2) {
+    advStatsBody.innerHTML = `<p class="muted-text">Complete at least 2 valid solves to unlock visual analytics.</p>`;
+    return;
   }
 
-  const mo3 = eventSolves.length >= 3 ? calculateMeanOfSlice(eventSolves.slice(-3)) : null;
-  const bestMo3 = getBestRollingAvg(eventSolves, 3, true);
-  const ao5 = calculateTrimmedAverage(eventSolves, 5), bestAo5 = getBestRollingAvg(eventSolves, 5);
-  const ao12 = calculateTrimmedAverage(eventSolves, 12), bestAo12 = getBestRollingAvg(eventSolves, 12);
-  const ao25 = calculateTrimmedAverage(eventSolves, 25), bestAo25 = getBestRollingAvg(eventSolves, 25);
-  const ao50 = calculateTrimmedAverage(eventSolves, 50), bestAo50 = getBestRollingAvg(eventSolves, 50);
-  const ao100 = calculateTrimmedAverage(eventSolves, 100), bestAo100 = getBestRollingAvg(eventSolves, 100);
-
-  advStatsTeaser.textContent = stdDev !== null ? `• σ ${formatTime(stdDev, dec)}s` : "";
-  advStatsSubtitle.textContent = `${eventSolves.length} total (${valid.length} valid, ${dnfCount} DNF, ${plus2Count} +2)`;
-
-  const fmt = (v) => (v === null ? "-" : formatTime(v, dec));
-  const cards = [
-    ["Mo3", fmt(mo3), `Best: ${fmt(bestMo3)}`],
-    ["Ao5", fmt(ao5), `Best: ${fmt(bestAo5)}`],
-    ["Ao12", fmt(ao12), `Best: ${fmt(bestAo12)}`],
-    ["Ao25", fmt(ao25), `Best: ${fmt(bestAo25)}`],
-    ["Ao50", fmt(ao50), `Best: ${fmt(bestAo50)}`],
-    ["Ao100", fmt(ao100), `Best: ${fmt(bestAo100)}`],
-    ["Median", fmt(median), `Single PB: ${fmt(best)}`],
-    ["Worst", fmt(worst), `Spread: ${best && worst ? formatTime(worst - best, dec) : "-"}`],
-    ["Std Dev (σ)", stdDev !== null ? `${formatTime(stdDev, dec)}s` : "-", `IQR: ${iqr !== null ? formatTime(iqr, dec) + "s" : "-"}`],
-    ["Consistency", consistency !== null ? `${consistency.toFixed(1)}%` : "-", `Last 10 Δ: ${trendDeltaText}`],
-    [`Sub-${formatTime(settings.goalMs, 2)}`, `${subPct}%`, `${subCount}/${valid.length} solves`],
-    ["Goal Streak", `${bestStreak}`, `Current: ${curStreak}`],
+  const allBrackets = [
+    { label: "0–5s", min: 0, max: 5000, count: 0 },
+    { label: "5–10s", min: 5000, max: 10000, count: 0 },
+    { label: "10–15s", min: 10000, max: 15000, count: 0 },
+    { label: "15–20s", min: 15000, max: 20000, count: 0 },
+    { label: "20–30s", min: 20000, max: 30000, count: 0 },
+    { label: "30–45s", min: 30000, max: 45000, count: 0 },
+    { label: "45s+", min: 45000, max: Infinity, count: 0 },
   ];
+  valid.forEach((t) => { const b = allBrackets.find((x) => t >= x.min && t < x.max); if (b) b.count++; });
+  const firstB = allBrackets.findIndex((b) => b.count > 0);
+  const lastB = allBrackets.length - 1 - [...allBrackets].reverse().findIndex((b) => b.count > 0);
+  const activeBrackets = allBrackets.slice(Math.max(0, firstB), Math.min(allBrackets.length, lastB + 1));
+  const maxBracket = Math.max(...activeBrackets.map((b) => b.count), 1);
 
-  let histHtml = "";
-  if (valid.length >= 3 && worst > best) {
-    const bins = 6, step = (worst - best) / bins;
-    const counts = Array(bins).fill(0);
-    valid.forEach((t) => { counts[Math.min(bins - 1, Math.floor((t - best) / step))]++; });
-    const maxCount = Math.max(...counts, 1);
-    histHtml = `
-      <div class="hist-chart">
-        <div class="panel-header"><span>Time Distribution</span><span>${valid.length} valid solves</span></div>
-        <div class="hist-bars">
-          ${counts.map((c, i) => `
-            <div class="hist-col">
-              <span class="hist-count">${c}</span>
-              <div class="hist-bar" style="height:${Math.max(6, Math.round((c / maxCount) * 100))}%"></div>
-              <span class="hist-label">${formatTime(best + i * step, 1)}</span>
-            </div>
-          `).join("")}
-        </div>
+  const bracketsHtml = activeBrackets.map((b) => `
+    <div class="bracket-row">
+      <span>${b.label}</span>
+      <div class="bracket-track"><div class="bracket-fill" style="width:${Math.round((b.count / maxBracket) * 100)}%"></div></div>
+      <span class="bracket-val">${b.count} (${Math.round((b.count / valid.length) * 100)}%)</span>
+    </div>
+  `).join("");
+
+  const trajW = 340, trajH = 128, tPad = 14;
+  let runningPB = Infinity;
+  const pbPoints = [], rollPoints = [], rollWin = valid.length >= 12 ? 12 : 3;
+  for (let i = 0; i < valid.length; i++) {
+    if (valid[i] < runningPB) runningPB = valid[i];
+    pbPoints.push(runningPB);
+    const slice = valid.slice(Math.max(0, i - rollWin + 1), i + 1);
+    rollPoints.push(slice.reduce((a, b) => a + b, 0) / slice.length);
+  }
+
+  const n = valid.length;
+  const sumX = (n * (n - 1)) / 2, sumXX = (n * (n - 1) * (2 * n - 1)) / 6;
+  const sumY = valid.reduce((a, b) => a + b, 0);
+  const sumXY = valid.reduce((a, y, i) => a + i * y, 0);
+  const slope = (n * sumXX - sumX * sumX) ? (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX) : 0;
+  const slopePer10 = slope * 10;
+  const slopeText = slopePer10 <= -20 ? `↗ Improving -${formatTime(Math.abs(slopePer10), 2)}s / 10` : slopePer10 >= 20 ? `↘ Slower +${formatTime(slopePer10, 2)}s / 10` : "→ Steady pace";
+
+  const tMin = Math.min(...pbPoints, ...rollPoints), tMax = Math.max(...pbPoints, ...rollPoints), tSpan = Math.max(1, tMax - tMin);
+  const toXY = (val, i) => `${(tPad + (i / (n - 1)) * (trajW - tPad * 2)).toFixed(1)},${(trajH - tPad - ((val - tMin) / tSpan) * (trajH - tPad * 2)).toFixed(1)}`;
+  const pbPoly = pbPoints.map(toXY).join(" "), rollPoly = rollPoints.map(toXY).join(" ");
+
+  const todBuckets = [
+    { label: "Morning", sum: 0, count: 0 }, { label: "Afternoon", sum: 0, count: 0 },
+    { label: "Evening", sum: 0, count: 0 }, { label: "Night", sum: 0, count: 0 },
+  ];
+  validEntries.forEach((e) => {
+    const hr = new Date(e.createdAt).getHours();
+    const bi = hr >= 5 && hr < 12 ? 0 : hr >= 12 && hr < 17 ? 1 : hr >= 17 && hr < 22 ? 2 : 3;
+    todBuckets[bi].sum += e.ms; todBuckets[bi].count++;
+  });
+  const todAvgs = todBuckets.map((b) => (b.count ? b.sum / b.count : null));
+  const validTods = todAvgs.filter((v) => v !== null);
+  const bestTodVal = validTods.length ? Math.min(...validTods) : null;
+  const maxTodVal = validTods.length ? Math.max(...validTods) : 1;
+  const bestTodName = bestTodVal !== null ? todBuckets[todAvgs.indexOf(bestTodVal)].label : "-";
+
+  const todHtml = todBuckets.map((b, i) => {
+    const avg = todAvgs[i];
+    const hPct = avg !== null ? Math.max(18, Math.round((1 - (avg - bestTodVal * 0.85) / Math.max(1, maxTodVal - bestTodVal * 0.85)) * 85 + 15)) : 8;
+    const isBest = avg !== null && avg === bestTodVal;
+    return `
+      <div class="tod-col ${isBest ? "best" : ""}">
+        <span class="tod-time">${avg !== null ? formatTime(avg, 2) : "-"}</span>
+        <div class="tod-bar-wrap"><div class="tod-bar" style="height:${avg !== null ? hPct : 6}%"></div></div>
+        <span class="tod-lbl">${b.label} (${b.count})</span>
       </div>
+    `;
+  }).join("");
+
+  const dayMap = new Map();
+  validEntries.forEach((e) => {
+    const k = new Date(e.createdAt).toLocaleDateString();
+    if (!dayMap.has(k)) dayMap.set(k, []);
+    dayMap.get(k).push(e.ms);
+  });
+
+  let heatCells = [], heatTitleNote = "";
+  if (dayMap.size >= 3) {
+    heatTitleNote = "Last 21 active days";
+    heatCells = [...dayMap.entries()].slice(-21).map(([d, times]) => {
+      const avg = times.reduce((a, b) => a + b, 0) / times.length;
+      const sc = Math.min(1, Math.max(0.18, 1 - (avg - best) / Math.max(1, worst - best)));
+      return { title: `${d}: ${times.length} solves • ${formatTime(avg, 2)} avg`, alpha: sc.toFixed(2) };
+    });
+  } else {
+    heatTitleNote = "5-solve blocks (brighter = faster)";
+    const bSize = valid.length >= 15 ? 5 : 2;
+    for (let i = 0; i < valid.length; i += bSize) {
+      const sl = valid.slice(i, i + bSize);
+      const avg = sl.reduce((a, b) => a + b, 0) / sl.length;
+      const sc = Math.min(1, Math.max(0.18, 1 - (avg - best) / Math.max(1, worst - best)));
+      heatCells.push({ title: `Solves #${i + 1}-${i + sl.length}: ${formatTime(avg, 2)} avg`, alpha: sc.toFixed(2) });
+    }
+    heatCells = heatCells.slice(-28);
+  }
+  const heatmapHtml = heatCells.map((c) => `<div class="heat-cell" style="opacity:${c.alpha}" title="${c.title}"></div>`).join("");
+
+  const chunkSize = valid.length >= 15 ? 5 : 2;
+  const chunks = [];
+  for (let i = 0; i + chunkSize <= valid.length; i += chunkSize) {
+    const sl = valid.slice(i, i + chunkSize);
+    const cMean = sl.reduce((a, b) => a + b, 0) / sl.length;
+    const cSd = Math.sqrt(sl.reduce((a, t) => a + (t - cMean) ** 2, 0) / sl.length);
+    chunks.push({ label: `#${i + 1}-${i + chunkSize}`, mean: cMean, sd: cSd });
+  }
+  let scatterSvg = `<p class="muted-text">Need ${chunkSize * 2}+ solves for scatter plot</p>`;
+  if (chunks.length >= 2) {
+    const sw = 220, sh = 115, sp = 16;
+    const minM = Math.min(...chunks.map((c) => c.mean)), maxM = Math.max(...chunks.map((c) => c.mean));
+    const minS = Math.min(...chunks.map((c) => c.sd)), maxS = Math.max(...chunks.map((c) => c.sd));
+    const spanM = Math.max(1, maxM - minM), spanS = Math.max(1, maxS - minS);
+    const dots = chunks.map((c, idx) => {
+      const x = sp + ((c.mean - minM) / spanM) * (sw - sp * 2);
+      const y = sh - sp - ((c.sd - minS) / spanS) * (sh - sp * 2);
+      const op = (0.25 + (idx / (chunks.length - 1)) * 0.75).toFixed(2);
+      return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${idx === chunks.length - 1 ? 4.5 : 3}" fill="var(--accent-color)" opacity="${op}"><title>${c.label}: ${formatTime(c.mean, 2)} avg • σ ${formatTime(c.sd, 2)}s</title></circle>`;
+    }).join("");
+    scatterSvg = `
+      <svg viewBox="0 0 ${sw} ${sh}" width="100%" height="112">
+        <line x1="${sp}" y1="${sh - sp}" x2="${sw - sp}" y2="${sh - sp}" stroke="var(--border-strong)" stroke-width="1"/>
+        <line x1="${sp}" y1="${sp}" x2="${sp}" y2="${sh - sp}" stroke="var(--border-strong)" stroke-width="1"/>
+        <text x="${sp + 3}" y="${sh - 4}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">← Faster &amp; Steadier</text>
+        ${dots}
+      </svg>
     `;
   }
 
+  const sorted = [...valid].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const iqr = sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.75)] - sorted[Math.floor(sorted.length * 0.25)] : null;
+  const subCount = valid.filter((t) => t <= settings.goalMs).length;
+  let curStreak = 0, bestStreak = 0;
+  eventSolves.forEach((s) => { if (getEffectiveMs(s) <= settings.goalMs) { curStreak++; if (curStreak > bestStreak) bestStreak = curStreak; } else curStreak = 0; });
+
+  const fmt = (v) => (v === null ? "-" : formatTime(v, dec));
+  const mo3 = eventSolves.length >= 3 ? calculateMeanOfSlice(eventSolves.slice(-3)) : null;
+  const rows = [
+    ["Single", formatSolve(eventSolves.slice(-1)[0], dec), fmt(best), `Worst: ${fmt(worst)}`],
+    ["Mo3", fmt(mo3), fmt(getBestRollingAvg(eventSolves, 3, true)), `Median: ${fmt(median)}`],
+    ["Ao5", fmt(calculateTrimmedAverage(eventSolves, 5)), fmt(getBestRollingAvg(eventSolves, 5)), `Sub-Goal: ${Math.round((subCount / valid.length) * 100)}%`],
+    ["Ao12", fmt(calculateTrimmedAverage(eventSolves, 12)), fmt(getBestRollingAvg(eventSolves, 12)), `Goal Streak: ${bestStreak} (cur ${curStreak})`],
+    ["Ao25 / Ao50", `${fmt(calculateTrimmedAverage(eventSolves, 25))} / ${fmt(calculateTrimmedAverage(eventSolves, 50))}`, `${fmt(getBestRollingAvg(eventSolves, 25))} / ${fmt(getBestRollingAvg(eventSolves, 50))}`, `Std Dev: ${stdDev !== null ? formatTime(stdDev, dec) + "s" : "-"}`],
+    ["Ao100", fmt(calculateTrimmedAverage(eventSolves, 100)), fmt(getBestRollingAvg(eventSolves, 100)), `Consistency: ${consistency ? consistency.toFixed(1) + "%" : "-"} · IQR: ${iqr ? formatTime(iqr, dec) + "s" : "-"}`],
+  ];
+
   advStatsBody.innerHTML = `
-    <div class="adv-grid">
-      ${cards.map(([lbl, val, sub]) => `<div class="adv-card"><span>${lbl}</span><strong>${val}</strong><small>${sub}</small></div>`).join("")}
+    <div class="charts-grid-2">
+      <div class="chart-card">
+        <div class="chart-title-row"><span>Time Brackets</span><small>${valid.length} valid solves</small></div>
+        <div class="bracket-list">${bracketsHtml}</div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title-row"><span>Improvement Trajectory</span><small>${slopeText}</small></div>
+        <svg viewBox="0 0 ${trajW} ${trajH}" width="100%" height="120" style="color:var(--accent-color)">
+          <polyline fill="none" stroke="currentColor" stroke-opacity="0.32" stroke-dasharray="4 3" stroke-width="1.4" points="${pbPoly}" />
+          <polyline fill="none" stroke="currentColor" stroke-width="2" points="${rollPoly}" />
+          <text x="6" y="12" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMax, 1)}</text>
+          <text x="6" y="${trajH - 4}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMin, 1)}</text>
+        </svg>
+        <small class="muted-text" style="font-size:0.7rem;">Solid = Rolling Ao${rollWin} • Dashed = Single PB Staircase</small>
+      </div>
     </div>
-    ${histHtml}
+
+    <div class="charts-grid-3">
+      <div class="chart-card"><div class="chart-title-row"><span>Time of Day</span><small>Prime: ${bestTodName}</small></div><div class="tod-grid">${todHtml}</div></div>
+      <div class="chart-card"><div class="chart-title-row"><span>Performance Heatmap</span><small>${heatTitleNote}</small></div><div class="heatmap-grid">${heatmapHtml}</div></div>
+      <div class="chart-card"><div class="chart-title-row"><span>Speed vs Consistency</span><small>${chunkSize}-solve blocks</small></div>${scatterSvg}</div>
+    </div>
+
+    <div class="records-table-wrap">
+      <table class="records-table">
+        <thead><tr><th>Metric</th><th>Current</th><th>Best Ever</th><th>Details</th></tr></thead>
+        <tbody>${rows.map(([m, c, b, n]) => `<tr><td>${m}</td><td class="num">${c}</td><td class="num">${b}</td><td style="color:var(--text-secondary)">${n}</td></tr>`).join("")}</tbody>
+      </table>
+    </div>
   `;
 }
 
@@ -1319,7 +1456,7 @@ function renderAll() {
   renderAdvancedStats(eventSolves);
 
   const latest = eventSolves[eventSolves.length - 1];
-  if (latest && timerState !== "running" && timerState !== "holding" && timerState !== "ready") {
+  if (latest && timerState !== "running" && timerState !== "holding" && timerState !== "ready" && timerState !== "inspecting") {
     lastSolveActions.classList.remove("hidden");
     lastPlus2Btn.classList.toggle("active", latest.penalty === "+2");
     lastDnfBtn.classList.toggle("active", latest.penalty === "DNF");
@@ -1499,22 +1636,13 @@ eventSelect.addEventListener("change", () => {
   prefetchedScramble = null; prefetchedEvent = null;
   saveSettings(); renderAll(); loadNextScramble(settings.event);
 });
-trendRangeSelect.addEventListener("change", () => {
-  updateSetting("trendRange", trendRangeSelect.value);
-  trendRangeSelect.blur();
-});
-
-trendFlattenBtn.addEventListener("click", () => {
-  trendFlattenBtn.blur();
-  updateSetting("trendFlatten", !settings.trendFlatten);
-});
+trendRangeSelect.addEventListener("change", () => { updateSetting("trendRange", trendRangeSelect.value); trendRangeSelect.blur(); });
+trendFlattenBtn.addEventListener("click", () => { trendFlattenBtn.blur(); updateSetting("trendFlatten", !settings.trendFlatten); });
 inspTogglePill.addEventListener("click", () => {
   inspTogglePill.blur();
   if (timerState !== "idle") return;
   updateSetting("inspection", !settings.inspection);
 });
-inspEnabledInput.addEventListener("change", () => updateSetting("inspection", inspEnabledInput.checked));
-inspAudioInput.addEventListener("change", () => updateSetting("inspectionAudio", inspAudioInput.checked));
 
 newScrambleBtn.addEventListener("click", () => { newScrambleBtn.blur(); loadNextScramble(settings.event); });
 copyScrambleBtn.addEventListener("click", async () => {
@@ -1666,23 +1794,29 @@ function applySettingsToUI() {
 
   holdDelayInput.value = settings.holdDelayMs; holdDelayValue.textContent = `${settings.holdDelayMs}ms`;
   decimalsSeg.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("active", Number(b.dataset.dec) === settings.decimals));
+  inspEnabledInput.checked = Boolean(settings.inspection);
+  inspAudioInput.checked = Boolean(settings.inspectionAudio);
+  inspTogglePill.textContent = settings.inspection ? "Insp: 15s" : "Insp: Off";
+  inspTogglePill.classList.toggle("active", Boolean(settings.inspection));
+  trendFlattenBtn.classList.toggle("active", Boolean(settings.trendFlatten));
+
   focusModeInput.checked = settings.focusMode; focusBgSelect.value = settings.focusBgBehavior;
   timerSizeInput.value = settings.timerSize; timerSizeValue.textContent = `${settings.timerSize}rem`;
   scrambleSizeInput.value = settings.scrambleSize; scrambleSizeValue.textContent = `${settings.scrambleSize}rem`;
   sidebarWidthInput.value = settings.sidebarWidth; sidebarWidthValue.textContent = `${settings.sidebarWidth}px`;
   profileNameLabel.textContent = settings.profileName;
   profileAvatar.textContent = (settings.profileName[0] || "C").toUpperCase();
-  trendFlattenBtn.classList.toggle("active", Boolean(settings.trendFlatten));
-  inspEnabledInput.checked = Boolean(settings.inspection);
-  inspAudioInput.checked = Boolean(settings.inspectionAudio);
-  inspTogglePill.textContent = settings.inspection ? "Insp: 15s" : "Insp: Off";
-  inspTogglePill.classList.toggle("active", Boolean(settings.inspection));
-  if (timerState === "idle") setTimerState("idle");
+
+  if (timerState === "idle") {
+    timerHintText.textContent = settings.inspection ? "Tap SPACE or CLICK to inspect (15s)" : "Hold SPACE or CLICK to ready";
+  }
 }
 
 function updateSetting(key, value) { settings[key] = value; saveSettings(); applySettingsToUI(); renderAll(); }
 holdDelayInput.addEventListener("input", () => updateSetting("holdDelayMs", Number(holdDelayInput.value)));
 decimalsSeg.addEventListener("click", (e) => { const b = e.target.closest("button[data-dec]"); if (b) updateSetting("decimals", Number(b.dataset.dec)); });
+inspEnabledInput.addEventListener("change", () => updateSetting("inspection", inspEnabledInput.checked));
+inspAudioInput.addEventListener("change", () => updateSetting("inspectionAudio", inspAudioInput.checked));
 focusModeInput.addEventListener("change", () => updateSetting("focusMode", focusModeInput.checked));
 focusBgSelect.addEventListener("change", () => updateSetting("focusBgBehavior", focusBgSelect.value));
 timerSizeInput.addEventListener("input", () => updateSetting("timerSize", Number(timerSizeInput.value)));
