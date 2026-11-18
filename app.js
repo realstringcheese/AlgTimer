@@ -1,17 +1,13 @@
-import {
-  EVENT_TO_PUZZLE, CSTIMER_EVENT_MAP, PREMADE_SCENES,
-  QUICK_MOODS, COLOR_PRESETS, SCENE_PRESETS, METHOD_GUIDES, METHOD_ALGS,
-} from "./data.js";
+import { EVENT_TO_PUZZLE, CSTIMER_EVENT_MAP, PREMADE_SCENES, QUICK_MOODS, COLOR_PRESETS, SCENE_PRESETS } from "./data.js";
+import { initTrainer, syncMethodViews, onTrainerTabVisible, renderImprovementView, handleImprovementKeyDown, handleImprovementKeyUp, handleImprovementPointerUp } from "./trainer.js";
 
 // === SECTION A1: STORAGE KEYS & DEFAULTS ===
 let randomScrambleForEvent = null;
-
 const STORAGE_SOLVES_KEY = "algtimer_solves_v1";
 const STORAGE_SETTINGS_KEY = "algtimer_settings_v2";
 const STORAGE_THEME_KEY = "algtimer_theme_v1";
 const STORAGE_CUSTOM_PRESETS_KEY = "algtimer_custom_presets_v1";
 const STORAGE_COLOR_HISTORY_KEY = "algtimer_color_history_v1";
-const STORAGE_LEARNED_KEY = "algtimer_learned_v1";
 
 const DEFAULT_THEME = {
   presetId: "c-mono", mood: "mono", bgMode: "color", sceneId: "mountains",
@@ -21,19 +17,14 @@ const DEFAULT_THEME = {
   sidebarAlpha: 90, sidebarBlur: 14, radius: 10,
   timerFont: '"JetBrains Mono", ui-monospace, Menlo, monospace',
   uiFont: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
-  timerBackdrop: false, scrambleBox: false,
-  bgBlur: 8, bgDim: 45, bgPosY: 50, bgScale: 105,
+  timerBackdrop: false, scrambleBox: false, bgBlur: 8, bgDim: 45, bgPosY: 50, bgScale: 105,
 };
 
 const COLOR_SLOTS = [
-  { key: "bgColor", label: "Main Background" },
-  { key: "sidebarColor", label: "Sidebars & Topbar" },
-  { key: "scrambleColor", label: "Scramble Box" },
-  { key: "cardColor", label: "Cards & Panels" },
-  { key: "textColor", label: "Primary Font" },
-  { key: "mutedColor", label: "Muted Font" },
-  { key: "accentColor", label: "Accent Color" },
-  { key: "holdingColor", label: "Hold State" },
+  { key: "bgColor", label: "Main Background" }, { key: "sidebarColor", label: "Sidebars & Topbar" },
+  { key: "scrambleColor", label: "Scramble Box" }, { key: "cardColor", label: "Cards & Panels" },
+  { key: "textColor", label: "Primary Font" }, { key: "mutedColor", label: "Muted Font" },
+  { key: "accentColor", label: "Accent Color" }, { key: "holdingColor", label: "Hold State" },
   { key: "readyColor", label: "Ready State" },
 ];
 
@@ -50,210 +41,42 @@ let activeTheme = loadJSON(STORAGE_THEME_KEY, DEFAULT_THEME, true);
 let savedPresets = loadArray(STORAGE_CUSTOM_PRESETS_KEY);
 let colorHistory = loadArray(STORAGE_COLOR_HISTORY_KEY);
 let solves = loadArray(STORAGE_SOLVES_KEY);
-let learnedAlgs = loadArray(STORAGE_LEARNED_KEY);
 
-let draftTheme = null;
-let uploadedBgDataUrl = null;
-let draftUploadedBgDataUrl = null;
+let draftTheme = null, uploadedBgDataUrl = null, draftUploadedBgDataUrl = null;
+let activeTab = "timer", activeStudioTab = "presets", activeColorSlot = "bgColor";
+let wheelHSV = { h: 0, s: 0, v: 0.04 }, isDraggingWheel = false;
+let advStatsOpen = false, showAllSolvesInList = false;
 
-let activeTab = "timer";
-let activeStudioTab = "presets";
-let activeColorSlot = "bgColor";
-let wheelHSV = { h: 0, s: 0, v: 0.04 };
-let isDraggingWheel = false;
-
-let activeAlgFilter = "ALL";
-let selectedAlgId = null;
-let selectedStageId = null;
-let advStatsOpen = false;
-
-let timerState = "idle";
-let activeTrigger = null;
-let holdTimeoutId = null;
-let startTime = 0;
-let rafId = null;
-let suppressNextClick = false;
-let toastTimeoutId = null;
-let pbTimeoutId = null;
-
-let currentScramble = "";
-let prefetchedScramble = null;
-let prefetchedEvent = null;
-let selectedSolveId = null;
-let scramblerLoadPromise = null;
+let timerState = "idle", activeTrigger = null, holdTimeoutId = null, startTime = 0, rafId = null;
+let suppressNextClick = false, toastTimeoutId = null, pbTimeoutId = null;
+let currentScramble = "", prefetchedScramble = null, prefetchedEvent = null, selectedSolveId = null, scramblerLoadPromise = null;
 
 const $ = (id) => document.getElementById(id);
-const appEl = $("app");
-const bgMediaEl = $("bg-media");
-const bgDimEl = $("bg-dim");
-const confettiCanvas = $("confetti-canvas");
-const navTabs = document.querySelectorAll(".nav-tab");
-const guideNavTab = $("guide-nav-tab");
-const viewTimer = $("view-timer");
-const viewAlgs = $("view-algs");
-const viewGuide = $("view-guide");
+const appEl = $("app"), bgMediaEl = $("bg-media"), bgDimEl = $("bg-dim"), confettiCanvas = $("confetti-canvas");
+const navTabs = document.querySelectorAll(".nav-tab"), viewTimer = $("view-timer"), viewAlgs = $("view-algs"), viewImprovement = $("view-improvement"), viewGuide = $("view-guide");
+const topbarEventPill = $("topbar-event-pill"), topbarAo5Pill = $("topbar-ao5-pill"), eventSelect = $("event-select");
+const scramblePlayer = $("scramble-player"), previewModeBadge = $("preview-mode-badge"), toggleDimBtn = $("toggle-dim-btn"), resetCamBtn = $("reset-cam-btn");
+const trendFlattenBtn = $("trend-flatten-btn"), trendRangeSelect = $("trend-range-select"), sparklineWrap = $("sparkline-wrap");
+const editGoalBtn = $("edit-goal-btn"), goalTargetLabel = $("goal-target-label"), goalCurrentLabel = $("goal-current-label"), goalFill = $("goal-fill");
+const scrambleArea = $("scramble-area"), scrambleTextEl = $("scramble-text"), scrambleStatusEl = $("scramble-status"), newScrambleBtn = $("new-scramble-btn"), copyScrambleBtn = $("copy-scramble-btn"), inspTogglePill = $("insp-toggle-pill");
+const timerZone = $("timer-zone"), timerCore = $("timer-core"), pbBanner = $("pb-banner"), timerDisplay = $("timer-display"), timerHintText = $("timer-hint-text");
+const lastSolveActions = $("last-solve-actions"), lastPlus2Btn = $("last-plus2-btn"), lastDnfBtn = $("last-dnf-btn"), lastDelBtn = $("last-del-btn");
+const advStatsToggle = $("adv-stats-toggle"), advStatsTeaser = $("adv-stats-teaser"), advStatsDrawer = $("adv-stats-drawer"), advStatsSubtitle = $("adv-stats-subtitle"), advStatsBody = $("adv-stats-body"), closeAdvStatsBtn = $("close-adv-stats-btn");
+const statBestEl = $("stat-best"), statAo5El = $("stat-ao5"), statAo12El = $("stat-ao12"), statMeanEl = $("stat-mean"), statCountEl = $("stat-count"), solveListEl = $("solve-list");
+const importBtn = $("import-btn"), settingsImportBtn = $("settings-import-btn"), importFileInput = $("import-file-input"), exportBtn = $("export-btn"), clearSessionBtn = $("clear-session-btn");
+const advChartTooltip = $("adv-chart-tooltip"), toastEl = $("toast");
 
-const topbarEventPill = $("topbar-event-pill");
-const topbarAo5Pill = $("topbar-ao5-pill");
-const eventSelect = $("event-select");
+window.addEventListener("error", (ev) => { if (scrambleStatusEl) scrambleStatusEl.textContent = `App error: ${ev.message}`; });
 
-const scramblePlayer = $("scramble-player");
-const previewModeBadge = $("preview-mode-badge");
-const toggleDimBtn = $("toggle-dim-btn");
-const resetCamBtn = $("reset-cam-btn");
-const trendFlattenBtn = $("trend-flatten-btn");
-const trendRangeSelect = $("trend-range-select");
-const sparklineWrap = $("sparkline-wrap");
-const editGoalBtn = $("edit-goal-btn");
-const goalTargetLabel = $("goal-target-label");
-const goalCurrentLabel = $("goal-current-label");
-const goalFill = $("goal-fill");
+// === SECTION A3: TOOLTIPS, DB & INITIALIZATION ===
+function showTooltip(text, x, y) {
+  advChartTooltip.textContent = text;
+  advChartTooltip.classList.remove("hidden");
+  advChartTooltip.style.left = `${x}px`;
+  advChartTooltip.style.top = `${y}px`;
+}
+function hideTooltip() { advChartTooltip.classList.add("hidden"); }
 
-const scrambleArea = $("scramble-area");
-const scrambleTextEl = $("scramble-text");
-const scrambleStatusEl = $("scramble-status");
-const newScrambleBtn = $("new-scramble-btn");
-const copyScrambleBtn = $("copy-scramble-btn");
-const inspTogglePill = $("insp-toggle-pill");
-
-const timerZone = $("timer-zone");
-const timerCore = $("timer-core");
-const pbBanner = $("pb-banner");
-const timerDisplay = $("timer-display");
-const timerHintText = $("timer-hint-text");
-
-const lastSolveActions = $("last-solve-actions");
-const lastPlus2Btn = $("last-plus2-btn");
-const lastDnfBtn = $("last-dnf-btn");
-const lastDelBtn = $("last-del-btn");
-const advStatsToggle = $("adv-stats-toggle");
-const advStatsTeaser = $("adv-stats-teaser");
-const advStatsDrawer = $("adv-stats-drawer");
-const advStatsSubtitle = $("adv-stats-subtitle");
-const advStatsBody = $("adv-stats-body");
-const closeAdvStatsBtn = $("close-adv-stats-btn");
-
-const statBestEl = $("stat-best");
-const statAo5El = $("stat-ao5");
-const statAo12El = $("stat-ao12");
-const statMeanEl = $("stat-mean");
-const statCountEl = $("stat-count");
-const solveListEl = $("solve-list");
-const importBtn = $("import-btn");
-const settingsImportBtn = $("settings-import-btn");
-const importFileInput = $("import-file-input");
-const exportBtn = $("export-btn");
-const clearSessionBtn = $("clear-session-btn");
-
-const algPageTitle = $("alg-page-title");
-const algGrid = $("alg-grid");
-const algFilterPills = $("alg-filter-pills");
-const algPlayer = $("alg-player");
-const algSimTitle = $("alg-sim-title");
-const algSimCat = $("alg-sim-cat");
-const algSimMoves = $("alg-sim-moves");
-const algSimTip = $("alg-sim-tip");
-
-const guidePageTitle = $("guide-page-title");
-const guidePageSubtitle = $("guide-page-subtitle");
-const stageList = $("stage-list");
-const stagePlayer = $("stage-player");
-const stageSimTitle = $("stage-sim-title");
-const stageSimBadge = $("stage-sim-badge");
-
-const themeBtn = $("theme-btn");
-const themeModal = $("theme-modal");
-const closeThemeBtn = $("close-theme-btn");
-const cancelThemeBtn = $("cancel-theme-btn");
-const applyThemeBtn = $("apply-theme-btn");
-const saveCustomPresetBtn = $("save-custom-preset-btn");
-const accentPillsWrap = $("accent-pills");
-const activeMoodLabel = $("active-mood-label");
-const studioTabs = document.querySelectorAll(".studio-tab");
-const studioPanePresets = $("studio-pane-presets");
-const studioPaneCustom = $("studio-pane-custom");
-const themeTimerBox = $("theme-timer-box");
-const themeScrambleBox = $("theme-scramble-box");
-const colorPresetsGrid = $("color-presets-grid");
-const scenePresetsGrid = $("scene-presets-grid");
-const savedPresetsSection = $("saved-presets-section");
-const savedPresetsGrid = $("saved-presets-grid");
-const sourceTabs = document.querySelectorAll(".source-tab");
-const bgSourceScene = $("bg-source-scene");
-const bgSourceUpload = $("bg-source-upload");
-const bgSlidersPanel = $("bg-sliders-panel");
-const galleryGrid = $("gallery-grid");
-const uploadBgBtn = $("upload-bg-btn");
-const uploadStatusText = $("upload-status-text");
-const bgImageInput = $("bg-image-input");
-const themeBgBlur = $("theme-bg-blur");
-const bgBlurVal = $("bg-blur-val");
-const themeBgDim = $("theme-bg-dim");
-const bgDimVal = $("bg-dim-val");
-const themeBgPosY = $("theme-bg-posy");
-const bgPosYVal = $("bg-posy-val");
-const themeBgScale = $("theme-bg-scale");
-const bgScaleVal = $("bg-scale-val");
-const colorSlotsWrap = $("color-slots");
-const wheelSlotName = $("wheel-slot-name");
-const wheelHexBadge = $("wheel-hex-badge");
-const wheelWrap = $("wheel-wrap");
-const wheelCanvas = $("color-wheel-canvas");
-const wheelCursor = $("wheel-cursor");
-const wheelValSlider = $("wheel-val-slider");
-const wheelHexInput = $("wheel-hex-input");
-const colorHistorySwatches = $("color-history-swatches");
-const clearHistoryBtn = $("clear-history-btn");
-const themeSidebarAlpha = $("theme-sidebar-alpha");
-const sidebarAlphaVal = $("sidebar-alpha-val");
-const themeSidebarBlur = $("theme-sidebar-blur");
-const sidebarBlurVal = $("sidebar-blur-val");
-const themeRadius = $("theme-radius");
-const radiusVal = $("radius-val");
-const themeTimerFont = $("theme-timer-font");
-const themeUiFont = $("theme-ui-font");
-
-const settingsModal = $("settings-modal");
-const settingsBtn = $("settings-btn");
-const closeSettingsBtn = $("close-settings-btn");
-const holdDelayInput = $("setting-hold-delay");
-const holdDelayValue = $("hold-delay-value");
-const decimalsSeg = $("decimals-seg");
-const inspEnabledInput = $("setting-inspection");
-const inspAudioInput = $("setting-inspection-audio");
-const focusModeInput = $("setting-focus-mode");
-const focusBgSelect = $("setting-focus-bg");
-const timerSizeInput = $("setting-timer-size");
-const timerSizeValue = $("timer-size-value");
-const scrambleSizeInput = $("setting-scramble-size");
-const scrambleSizeValue = $("scramble-size-value");
-const sidebarWidthInput = $("setting-sidebar-width");
-const sidebarWidthValue = $("sidebar-width-value");
-
-const profileBtn = $("profile-btn");
-const profileModal = $("profile-modal");
-const closeProfileBtn = $("close-profile-btn");
-const profileAvatar = $("profile-avatar");
-const profileNameLabel = $("profile-name-label");
-const profileNameInput = $("profile-name-input");
-const profileMethodSelect = $("profile-method-select");
-const saveProfileBtn = $("save-profile-btn");
-
-const solveModal = $("solve-modal");
-const closeSolveModalBtn = $("close-solve-modal-btn");
-const solveModalTime = $("solve-modal-time");
-const solveModalMeta = $("solve-modal-meta");
-const solveModalScramble = $("solve-modal-scramble");
-const modalPlus2Btn = $("modal-plus2-btn");
-const modalDnfBtn = $("modal-dnf-btn");
-const modalDelBtn = $("modal-del-btn");
-const toastEl = $("toast");
-
-window.addEventListener("error", (ev) => {
-  if (scrambleStatusEl) scrambleStatusEl.textContent = `App error: ${ev.message}`;
-});
-
-// === SECTION A3: INITIALIZATION & INDEXEDDB ===
 function openBgDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open("algtimer_assets", 1);
@@ -262,106 +85,89 @@ function openBgDB() {
     req.onerror = () => reject(req.error);
   });
 }
-
 async function saveUploadedBg(dataUrl) {
-  try {
-    const db = await openBgDB();
-    db.transaction("wallpapers", "readwrite").objectStore("wallpapers").put(dataUrl, "custom_bg");
-  } catch (e) { console.warn(e); }
+  try { (await openBgDB()).transaction("wallpapers", "readwrite").objectStore("wallpapers").put(dataUrl, "custom_bg"); } catch {}
 }
-
 async function loadUploadedBg() {
   try {
-    const db = await Promise.race([
-      openBgDB(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("IDB timeout")), 1000)),
-    ]);
-    return await new Promise((resolve) => {
-      const req = db.transaction("wallpapers", "readonly").objectStore("wallpapers").get("custom_bg");
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => resolve(null);
+    const db = await Promise.race([openBgDB(), new Promise((_, rej) => setTimeout(() => rej(), 1000))]);
+    return await new Promise((res) => {
+      const r = db.transaction("wallpapers", "readonly").objectStore("wallpapers").get("custom_bg");
+      r.onsuccess = () => res(r.result || null); r.onerror = () => res(null);
     });
   } catch { return null; }
 }
-
 function importWithTimeout(url, ms = 8000) {
-  return Promise.race([
-    import(url),
-    new Promise((_, reject) => setTimeout(() => reject(new Error("Network timeout")), ms)),
-  ]);
+  return Promise.race([import(url), new Promise((_, rej) => setTimeout(() => rej(new Error("Timeout")), ms))]);
 }
-
 function ensureScramblerLoaded() {
   if (randomScrambleForEvent) return Promise.resolve(true);
   if (!scramblerLoadPromise) {
     scramblerLoadPromise = importWithTimeout("https://cdn.cubing.net/v0/js/cubing/scramble", 8000)
       .then((mod) => {
         randomScrambleForEvent = mod.randomScrambleForEvent;
-        if (timerState === "idle" && scrambleStatusEl.textContent.includes("Offline")) {
-          loadNextScramble(settings.event);
-        }
+        if (timerState === "idle" && scrambleStatusEl.textContent.includes("Offline")) loadNextScramble(settings.event);
         return true;
-      })
-      .catch((err) => {
-        console.warn("WCA scrambler unreachable:", err);
-        scramblerLoadPromise = null;
-        return false;
-      });
+      }).catch(() => { scramblerLoadPromise = null; return false; });
   }
   return scramblerLoadPromise;
 }
 
+function switchTab(tabName) {
+  activeTab = tabName;
+  navTabs.forEach((b) => b.classList.toggle("active", b.dataset.tab === tabName));
+  viewTimer.classList.toggle("hidden", tabName !== "timer");
+  viewAlgs.classList.toggle("hidden", tabName !== "algs");
+  viewImprovement.classList.toggle("hidden", tabName !== "improvement");
+  viewGuide.classList.toggle("hidden", tabName !== "guide");
+  onTrainerTabVisible(tabName);
+}
+
 async function init() {
-  try {
-    currentScramble = localFallbackScramble(settings.event);
-    scrambleTextEl.textContent = currentScramble;
-    scrambleStatusEl.textContent = "Connecting WCA...";
-    previewModeBadge.textContent = "Loading...";
+  initTrainer({
+    getSettings: () => settings,
+    getSolves: () => solves,
+    getActiveTab: () => activeTab,
+    formatTime, getEffectiveMs, showToast, switchTab, showTooltip, hideTooltip,
+  });
 
-    eventSelect.value = settings.event;
-    trendRangeSelect.value = settings.trendRange;
-    applySettingsToUI();
-    applyThemeToDOM(activeTheme, uploadedBgDataUrl);
-    drawColorWheel();
-    syncMethodViews();
-    renderAll();
+  currentScramble = localFallbackScramble(settings.event);
+  scrambleTextEl.textContent = currentScramble;
+  scrambleStatusEl.textContent = "Connecting WCA...";
+  previewModeBadge.textContent = "Loading...";
 
-    uploadedBgDataUrl = await loadUploadedBg();
-    if (uploadedBgDataUrl) applyThemeToDOM(activeTheme, uploadedBgDataUrl);
+  eventSelect.value = settings.event;
+  trendRangeSelect.value = settings.trendRange;
+  applySettingsToUI();
+  applyThemeToDOM(activeTheme, uploadedBgDataUrl);
+  drawColorWheel();
+  syncMethodViews();
+  renderAll();
 
-    ensureScramblerLoaded().then((ok) => {
-      if (ok) {
-        if (timerState === "idle") loadNextScramble(settings.event);
-      } else {
-        scrambleStatusEl.textContent = "Offline fallback (Wi-Fi)";
-      }
-    });
+  uploadedBgDataUrl = await loadUploadedBg();
+  if (uploadedBgDataUrl) applyThemeToDOM(activeTheme, uploadedBgDataUrl);
 
-    importWithTimeout("https://cdn.cubing.net/v0/js/cubing/twisty", 12000)
-      .then(() => updateScramblePreview())
-      .catch((err) => {
-        console.warn("3D preview offline:", err);
-        previewModeBadge.textContent = "Offline";
-      });
-  } catch (err) {
-    console.error("Init error:", err);
-    if (scrambleStatusEl) scrambleStatusEl.textContent = `Init error: ${err.message}`;
-  }
+  ensureScramblerLoaded().then((ok) => {
+    if (ok) { if (timerState === "idle") loadNextScramble(settings.event); }
+    else scrambleStatusEl.textContent = "Offline fallback (Wi-Fi)";
+  });
+
+  importWithTimeout("https://cdn.cubing.net/v0/js/cubing/twisty", 12000)
+    .then(() => updateScramblePreview())
+    .catch(() => { previewModeBadge.textContent = "Offline"; });
 }
 
 function showToast(msg) {
-  toastEl.textContent = msg;
-  toastEl.classList.remove("hidden");
+  toastEl.textContent = msg; toastEl.classList.remove("hidden");
   clearTimeout(toastTimeoutId);
   toastTimeoutId = setTimeout(() => toastEl.classList.add("hidden"), 3200);
 }
 
-// === SECTION A4: COLOR WHEEL & THEME ENGINE ===
+// === SECTION A4: COLOR WHEEL & THEME STUDIO ===
 function hexToRgb(hex) {
-  const c = (hex || "#000000").replace("#", "");
-  const full = c.length === 3 ? c.split("").map((x) => x + x).join("") : c;
-  const num = parseInt(full, 16);
-  return Number.isNaN(num) ? { r: 10, g: 10, b: 10 } : { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+  const c = (hex || "#000000").replace("#", ""), full = c.length === 3 ? c.split("").map((x) => x + x).join("") : c;
+  const n = parseInt(full, 16);
+  return Number.isNaN(n) ? { r: 10, g: 10, b: 10 } : { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 const hexToRgba = (hex, a) => { const { r, g, b } = hexToRgb(hex); return `rgba(${r}, ${g}, ${b}, ${a})`; };
 const isLightColor = (hex) => { const { r, g, b } = hexToRgb(hex); return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.62; };
@@ -371,107 +177,73 @@ function hsvToHex(h, s, v) {
   const toHex = (x) => Math.round(x * 255).toString(16).padStart(2, "0");
   return `#${toHex(f(5))}${toHex(f(3))}${toHex(f(1))}`;
 }
-
 function hexToHsv(hex) {
-  const { r: r0, g: g0, b: b0 } = hexToRgb(hex);
-  const r = r0 / 255, g = g0 / 255, b = b0 / 255;
+  const { r: r0, g: g0, b: b0 } = hexToRgb(hex), r = r0 / 255, g = g0 / 255, b = b0 / 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
   let h = 0;
-  if (d !== 0) {
-    if (max === r) h = ((g - b) / d) % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h = (h * 60 + 360) % 360;
-  }
+  if (d !== 0) { h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4; h = (h * 60 + 360) % 360; }
   return { h, s: max === 0 ? 0 : d / max, v: max };
 }
-
 function drawColorWheel() {
-  const ctx = wheelCanvas.getContext("2d"), size = wheelCanvas.width, c = size / 2, r = c - 2;
-  const img = ctx.createImageData(size, size);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const dx = x - c, dy = y - c, dist = Math.hypot(dx, dy), idx = (y * size + x) * 4;
-      if (dist <= r) {
-        const { r: cr, g: cg, b: cb } = hexToRgb(hsvToHex((Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360, dist / r, 1));
-        img.data[idx] = cr; img.data[idx + 1] = cg; img.data[idx + 2] = cb; img.data[idx + 3] = 255;
-      }
+  const ctx2 = $("color-wheel-canvas").getContext("2d"), size = 152, c = 76, r = 74, img = ctx2.createImageData(size, size);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const dx = x - c, dy = y - c, dist = Math.hypot(dx, dy), idx = (y * size + x) * 4;
+    if (dist <= r) {
+      const { r: cr, g: cg, b: cb } = hexToRgb(hsvToHex((Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360, dist / r, 1));
+      img.data[idx] = cr; img.data[idx + 1] = cg; img.data[idx + 2] = cb; img.data[idx + 3] = 255;
     }
   }
-  ctx.putImageData(img, 0, 0);
+  ctx2.putImageData(img, 0, 0);
 }
-
 function syncWheelToHex(hex) {
   wheelHSV = hexToHsv(hex);
-  const c = wheelCanvas.width / 2, r = c - 2, rad = (wheelHSV.h * Math.PI) / 180, d = wheelHSV.s * r;
-  wheelCursor.style.left = `${c + Math.cos(rad) * d}px`;
-  wheelCursor.style.top = `${c + Math.sin(rad) * d}px`;
-  wheelValSlider.value = Math.round(wheelHSV.v * 100);
-  wheelHexInput.value = hex.toUpperCase();
-  wheelHexBadge.textContent = hex.toUpperCase();
+  const c = 76, r = 74, rad = (wheelHSV.h * Math.PI) / 180, d = wheelHSV.s * r;
+  $("wheel-cursor").style.left = `${c + Math.cos(rad) * d}px`; $("wheel-cursor").style.top = `${c + Math.sin(rad) * d}px`;
+  $("wheel-val-slider").value = Math.round(wheelHSV.v * 100);
+  $("wheel-hex-input").value = hex.toUpperCase(); $("wheel-hex-badge").textContent = hex.toUpperCase();
 }
-
 function pushColorHistory(hex) {
-  const upper = hex.toUpperCase();
-  if (!/^#[0-9A-F]{6}$/.test(upper)) return;
-  colorHistory = [upper, ...colorHistory.filter((c) => c !== upper)].slice(0, 14);
+  const u = hex.toUpperCase();
+  if (!/^#[0-9A-F]{6}$/.test(u)) return;
+  colorHistory = [u, ...colorHistory.filter((c) => c !== u)].slice(0, 14);
   localStorage.setItem(STORAGE_COLOR_HISTORY_KEY, JSON.stringify(colorHistory));
   renderColorHistory();
 }
-
 function applyDraftSlotColor(hex) {
   if (!draftTheme) return;
-  draftTheme[activeColorSlot] = hex;
-  syncWheelToHex(hex);
-  renderColorSlots();
-  applyThemeToDOM(draftTheme, draftUploadedBgDataUrl);
+  draftTheme[activeColorSlot] = hex; syncWheelToHex(hex); renderColorSlots(); applyThemeToDOM(draftTheme, draftUploadedBgDataUrl);
 }
-
 function handleWheelPointer(cx, cy) {
-  const rect = wheelCanvas.getBoundingClientRect(), c = rect.width / 2, r = c - 2;
+  const rect = $("color-wheel-canvas").getBoundingClientRect(), c = rect.width / 2, r = c - 2;
   let dx = cx - rect.left - c, dy = cy - rect.top - c, dist = Math.hypot(dx, dy);
   if (dist > r) { dx = (dx / dist) * r; dy = (dy / dist) * r; dist = r; }
-  wheelHSV.h = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
-  wheelHSV.s = dist / r;
+  wheelHSV.h = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360; wheelHSV.s = dist / r;
   applyDraftSlotColor(hsvToHex(wheelHSV.h, wheelHSV.s, wheelHSV.v));
 }
 
-wheelWrap.addEventListener("pointerdown", (e) => { isDraggingWheel = true; wheelWrap.setPointerCapture(e.pointerId); handleWheelPointer(e.clientX, e.clientY); });
-wheelWrap.addEventListener("pointermove", (e) => { if (isDraggingWheel) handleWheelPointer(e.clientX, e.clientY); });
-wheelWrap.addEventListener("pointerup", () => { if (isDraggingWheel && draftTheme) { isDraggingWheel = false; pushColorHistory(draftTheme[activeColorSlot]); } });
-wheelValSlider.addEventListener("input", () => { wheelHSV.v = Number(wheelValSlider.value) / 100; applyDraftSlotColor(hsvToHex(wheelHSV.h, wheelHSV.s, wheelHSV.v)); });
-wheelValSlider.addEventListener("change", () => draftTheme && pushColorHistory(draftTheme[activeColorSlot]));
-wheelHexInput.addEventListener("input", () => { const v = wheelHexInput.value.trim(); if (/^#[0-9A-Fa-f]{6}$/.test(v)) applyDraftSlotColor(v); });
-wheelHexInput.addEventListener("change", () => { const v = wheelHexInput.value.trim(); if (/^#[0-9A-Fa-f]{6}$/.test(v)) pushColorHistory(v); });
-clearHistoryBtn.addEventListener("click", () => { colorHistory = []; localStorage.setItem(STORAGE_COLOR_HISTORY_KEY, "[]"); renderColorHistory(); });
+$("wheel-wrap").addEventListener("pointerdown", (e) => { isDraggingWheel = true; $("wheel-wrap").setPointerCapture(e.pointerId); handleWheelPointer(e.clientX, e.clientY); });
+$("wheel-wrap").addEventListener("pointermove", (e) => { if (isDraggingWheel) handleWheelPointer(e.clientX, e.clientY); });
+$("wheel-wrap").addEventListener("pointerup", () => { if (isDraggingWheel && draftTheme) { isDraggingWheel = false; pushColorHistory(draftTheme[activeColorSlot]); } });
+$("wheel-val-slider").addEventListener("input", () => { wheelHSV.v = Number($("wheel-val-slider").value) / 100; applyDraftSlotColor(hsvToHex(wheelHSV.h, wheelHSV.s, wheelHSV.v)); });
+$("wheel-val-slider").addEventListener("change", () => draftTheme && pushColorHistory(draftTheme[activeColorSlot]));
+$("wheel-hex-input").addEventListener("input", () => { const v = $("wheel-hex-input").value.trim(); if (/^#[0-9A-Fa-f]{6}$/.test(v)) applyDraftSlotColor(v); });
+$("wheel-hex-input").addEventListener("change", () => { const v = $("wheel-hex-input").value.trim(); if (/^#[0-9A-Fa-f]{6}$/.test(v)) pushColorHistory(v); });
+$("clear-history-btn").addEventListener("click", () => { colorHistory = []; localStorage.setItem(STORAGE_COLOR_HISTORY_KEY, "[]"); renderColorHistory(); });
 
 function applyThemeToDOM(theme, uploadedImg) {
-  const root = document.documentElement.style;
-  const lightBase = isLightColor(theme.sidebarColor);
-  const borderBase = lightBase ? "#000000" : "#ffffff";
-
+  const root = document.documentElement.style, lightBase = isLightColor(theme.sidebarColor), bBase = lightBase ? "#000000" : "#ffffff";
   root.setProperty("--bg-primary", theme.bgColor);
   root.setProperty("--sidebar-bg-rgba", hexToRgba(theme.sidebarColor, theme.sidebarAlpha / 100));
   root.setProperty("--sidebar-blur", `${theme.sidebarBlur}px`);
   root.setProperty("--card-bg-rgba", hexToRgba(theme.cardColor, Math.min(0.95, (theme.sidebarAlpha + 4) / 100)));
   root.setProperty("--scramble-bg-rgba", theme.scrambleBox ? hexToRgba(theme.scrambleColor, 0.72) : "rgba(0,0,0,0)");
-  root.setProperty("--border-color", hexToRgba(borderBase, lightBase ? 0.14 : 0.1));
-  root.setProperty("--border-strong", hexToRgba(borderBase, lightBase ? 0.28 : 0.22));
-  root.setProperty("--text-primary", theme.textColor);
-  root.setProperty("--text-secondary", theme.mutedColor);
-  root.setProperty("--accent-color", theme.accentColor);
-  root.setProperty("--accent-contrast", isLightColor(theme.accentColor) ? "#0a0a0a" : "#ffffff");
-  root.setProperty("--state-idle", theme.textColor);
-  root.setProperty("--state-holding", theme.holdingColor);
-  root.setProperty("--state-ready", theme.readyColor);
-  root.setProperty("--state-running", theme.textColor);
-  root.setProperty("--font-timer", theme.timerFont);
-  root.setProperty("--font-ui", theme.uiFont);
-  root.setProperty("--radius", `${theme.radius}px`);
-  root.setProperty("--bg-blur", `${theme.bgBlur}px`);
-  root.setProperty("--bg-dim", String(theme.bgDim / 100));
-  root.setProperty("--bg-pos-y", `${theme.bgPosY}%`);
-  root.setProperty("--bg-scale", String(theme.bgScale / 100));
+  root.setProperty("--border-color", hexToRgba(bBase, lightBase ? 0.14 : 0.1));
+  root.setProperty("--border-strong", hexToRgba(bBase, lightBase ? 0.28 : 0.22));
+  root.setProperty("--text-primary", theme.textColor); root.setProperty("--text-secondary", theme.mutedColor);
+  root.setProperty("--accent-color", theme.accentColor); root.setProperty("--accent-contrast", isLightColor(theme.accentColor) ? "#0a0a0a" : "#ffffff");
+  root.setProperty("--state-idle", theme.textColor); root.setProperty("--state-holding", theme.holdingColor); root.setProperty("--state-ready", theme.readyColor); root.setProperty("--state-running", theme.textColor);
+  root.setProperty("--font-timer", theme.timerFont); root.setProperty("--font-ui", theme.uiFont); root.setProperty("--radius", `${theme.radius}px`);
+  root.setProperty("--bg-blur", `${theme.bgBlur}px`); root.setProperty("--bg-dim", String(theme.bgDim / 100)); root.setProperty("--bg-pos-y", `${theme.bgPosY}%`); root.setProperty("--bg-scale", String(theme.bgScale / 100));
 
   if (theme.bgMode === "scene") {
     const sc = PREMADE_SCENES.find((s) => s.id === theme.sceneId) || PREMADE_SCENES[0];
@@ -481,1102 +253,479 @@ function applyThemeToDOM(theme, uploadedImg) {
   } else {
     bgMediaEl.style.backgroundImage = "none"; bgMediaEl.style.opacity = "0"; bgDimEl.style.display = "none";
   }
-
   timerCore.classList.toggle("has-backdrop", Boolean(theme.timerBackdrop));
   scrambleArea.classList.toggle("has-box", Boolean(theme.scrambleBox));
 }
 
-// === SECTION A5: THEME STUDIO UI ===
-function openThemeStudio() {
-  draftTheme = JSON.parse(JSON.stringify(activeTheme));
-  draftUploadedBgDataUrl = uploadedBgDataUrl;
-  syncStudioUI();
-  themeModal.classList.remove("hidden");
-}
-function cancelThemeStudio() {
-  draftTheme = null; draftUploadedBgDataUrl = null;
-  applyThemeToDOM(activeTheme, uploadedBgDataUrl);
-  themeModal.classList.add("hidden");
-}
+function openThemeStudio() { draftTheme = JSON.parse(JSON.stringify(activeTheme)); draftUploadedBgDataUrl = uploadedBgDataUrl; syncStudioUI(); $("theme-modal").classList.remove("hidden"); }
+function cancelThemeStudio() { draftTheme = null; draftUploadedBgDataUrl = null; applyThemeToDOM(activeTheme, uploadedBgDataUrl); $("theme-modal").classList.add("hidden"); }
 async function applyThemeStudio() {
   if (!draftTheme) return;
   activeTheme = JSON.parse(JSON.stringify(draftTheme));
-  if (draftUploadedBgDataUrl && draftUploadedBgDataUrl !== uploadedBgDataUrl) {
-    uploadedBgDataUrl = draftUploadedBgDataUrl;
-    await saveUploadedBg(uploadedBgDataUrl);
-  }
+  if (draftUploadedBgDataUrl && draftUploadedBgDataUrl !== uploadedBgDataUrl) { uploadedBgDataUrl = draftUploadedBgDataUrl; await saveUploadedBg(uploadedBgDataUrl); }
   localStorage.setItem(STORAGE_THEME_KEY, JSON.stringify(activeTheme));
-  applyThemeToDOM(activeTheme, uploadedBgDataUrl);
-  draftTheme = null;
-  themeModal.classList.add("hidden");
-  showToast("Theme applied!");
+  applyThemeToDOM(activeTheme, uploadedBgDataUrl); draftTheme = null; $("theme-modal").classList.add("hidden"); showToast("Theme applied!");
 }
 
 function syncStudioUI() {
   if (!draftTheme) return;
   renderQuickMoods(); renderPresets(); renderGallery(); renderColorSlots(); renderColorHistory();
-  themeTimerBox.checked = Boolean(draftTheme.timerBackdrop);
-  themeScrambleBox.checked = Boolean(draftTheme.scrambleBox);
-  sourceTabs.forEach((b) => b.classList.toggle("active", b.dataset.bgMode === draftTheme.bgMode));
-  bgSourceScene.classList.toggle("hidden", draftTheme.bgMode !== "scene");
-  bgSourceUpload.classList.toggle("hidden", draftTheme.bgMode !== "upload");
-  bgSlidersPanel.classList.toggle("hidden", draftTheme.bgMode === "color");
-  uploadStatusText.textContent = draftUploadedBgDataUrl ? "Custom photo loaded" : "Upload your own wallpaper";
-
-  themeBgBlur.value = draftTheme.bgBlur; bgBlurVal.textContent = `${draftTheme.bgBlur}px`;
-  themeBgDim.value = draftTheme.bgDim; bgDimVal.textContent = `${draftTheme.bgDim}%`;
-  themeBgPosY.value = draftTheme.bgPosY; bgPosYVal.textContent = `${draftTheme.bgPosY}%`;
-  themeBgScale.value = draftTheme.bgScale; bgScaleVal.textContent = `${draftTheme.bgScale}%`;
-  themeSidebarAlpha.value = draftTheme.sidebarAlpha; sidebarAlphaVal.textContent = `${draftTheme.sidebarAlpha}%`;
-  themeSidebarBlur.value = draftTheme.sidebarBlur; sidebarBlurVal.textContent = `${draftTheme.sidebarBlur}px`;
-  themeRadius.value = draftTheme.radius; radiusVal.textContent = `${draftTheme.radius}px`;
-  themeTimerFont.value = draftTheme.timerFont;
-  themeUiFont.value = draftTheme.uiFont;
-
-  const slotMeta = COLOR_SLOTS.find((s) => s.key === activeColorSlot) || COLOR_SLOTS[0];
-  wheelSlotName.textContent = slotMeta.label;
+  $("theme-timer-box").checked = Boolean(draftTheme.timerBackdrop); $("theme-scramble-box").checked = Boolean(draftTheme.scrambleBox);
+  document.querySelectorAll(".source-tab").forEach((b) => b.classList.toggle("active", b.dataset.bgMode === draftTheme.bgMode));
+  $("bg-source-scene").classList.toggle("hidden", draftTheme.bgMode !== "scene");
+  $("bg-source-upload").classList.toggle("hidden", draftTheme.bgMode !== "upload");
+  $("bg-sliders-panel").classList.toggle("hidden", draftTheme.bgMode === "color");
+  $("upload-status-text").textContent = draftUploadedBgDataUrl ? "Custom photo loaded" : "Upload your own wallpaper";
+  $("theme-bg-blur").value = draftTheme.bgBlur; $("bg-blur-val").textContent = `${draftTheme.bgBlur}px`;
+  $("theme-bg-dim").value = draftTheme.bgDim; $("bg-dim-val").textContent = `${draftTheme.bgDim}%`;
+  $("theme-bg-posy").value = draftTheme.bgPosY; $("bg-posy-val").textContent = `${draftTheme.bgPosY}%`;
+  $("theme-bg-scale").value = draftTheme.bgScale; $("bg-scale-val").textContent = `${draftTheme.bgScale}%`;
+  $("theme-sidebar-alpha").value = draftTheme.sidebarAlpha; $("sidebar-alpha-val").textContent = `${draftTheme.sidebarAlpha}%`;
+  $("theme-sidebar-blur").value = draftTheme.sidebarBlur; $("sidebar-blur-val").textContent = `${draftTheme.sidebarBlur}px`;
+  $("theme-radius").value = draftTheme.radius; $("radius-val").textContent = `${draftTheme.radius}px`;
+  $("theme-timer-font").value = draftTheme.timerFont; $("theme-ui-font").value = draftTheme.uiFont;
+  $("wheel-slot-name").textContent = (COLOR_SLOTS.find((s) => s.key === activeColorSlot) || COLOR_SLOTS[0]).label;
   syncWheelToHex(draftTheme[activeColorSlot]);
 }
-
 function renderQuickMoods() {
-  accentPillsWrap.innerHTML = "";
+  const wrap = $("accent-pills"); wrap.innerHTML = "";
   const cur = QUICK_MOODS.find((m) => m.id === draftTheme.mood);
-  activeMoodLabel.textContent = cur ? cur.name.toUpperCase() : "CUSTOM";
+  $("active-mood-label").textContent = cur ? cur.name.toUpperCase() : "CUSTOM";
   QUICK_MOODS.forEach((m) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = `accent-pill ${draftTheme.mood === m.id ? "active" : ""}`;
-    btn.innerHTML = `<span class="accent-dot" style="background:${m.dot}"></span><span>${m.name}</span>`;
-    btn.addEventListener("click", () => {
-      Object.assign(draftTheme, { mood: m.id, bgColor: m.bg, sidebarColor: m.sidebar, cardColor: m.card, textColor: m.text, mutedColor: m.muted, accentColor: m.accent, presetId: null });
-      applyThemeToDOM(draftTheme, draftUploadedBgDataUrl);
-      syncStudioUI();
-    });
-    accentPillsWrap.appendChild(btn);
+    const b = document.createElement("button"); b.type = "button"; b.className = `accent-pill ${draftTheme.mood === m.id ? "active" : ""}`;
+    b.innerHTML = `<span class="accent-dot" style="background:${m.dot}"></span><span>${m.name}</span>`;
+    b.addEventListener("click", () => { Object.assign(draftTheme, { mood: m.id, bgColor: m.bg, sidebarColor: m.sidebar, cardColor: m.card, textColor: m.text, mutedColor: m.muted, accentColor: m.accent, presetId: null }); applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); syncStudioUI(); });
+    wrap.appendChild(b);
   });
 }
-
 function renderPresets() {
-  const makeCard = (p, isCustom = false) => {
-    const card = document.createElement("div");
-    card.className = `preset-card ${draftTheme.presetId === p.id ? "active" : ""}`;
-    let thumbStyle = `background: linear-gradient(135deg, ${p.theme.bgColor} 55%, ${p.theme.accentColor} 100%)`;
-    if (p.theme.bgMode === "scene") {
-      const sc = PREMADE_SCENES.find((s) => s.id === p.theme.sceneId);
-      if (sc) thumbStyle = `background-image: ${sc.uri}`;
-    }
-    card.innerHTML = `
-      <div class="preset-thumb" style="${thumbStyle}"></div>
-      <div class="preset-meta"><strong>${p.name}</strong><small>${p.desc || "Custom saved vibe"}</small></div>
-      ${isCustom ? `<button class="preset-del" data-del="${p.id}" type="button">✕</button>` : ""}
-    `;
-    card.addEventListener("click", (e) => {
-      if (e.target.closest("[data-del]")) {
-        e.stopPropagation();
-        savedPresets = savedPresets.filter((x) => x.id !== p.id);
-        localStorage.setItem(STORAGE_CUSTOM_PRESETS_KEY, JSON.stringify(savedPresets));
-        renderPresets();
-        return;
-      }
-      draftTheme = { ...DEFAULT_THEME, ...p.theme, presetId: p.id };
-      applyThemeToDOM(draftTheme, draftUploadedBgDataUrl);
-      syncStudioUI();
+  const makeCard = (p, isCust = false) => {
+    const c = document.createElement("div"); c.className = `preset-card ${draftTheme.presetId === p.id ? "active" : ""}`;
+    let ts = `background: linear-gradient(135deg, ${p.theme.bgColor} 55%, ${p.theme.accentColor} 100%)`;
+    if (p.theme.bgMode === "scene") { const sc = PREMADE_SCENES.find((s) => s.id === p.theme.sceneId); if (sc) ts = `background-image: ${sc.uri}`; }
+    c.innerHTML = `<div class="preset-thumb" style="${ts}"></div><div class="preset-meta"><strong>${p.name}</strong><small>${p.desc || "Custom"}</small></div>${isCust ? `<button class="preset-del" data-del="${p.id}" type="button">✕</button>` : ""}`;
+    c.addEventListener("click", (e) => {
+      if (e.target.closest("[data-del]")) { e.stopPropagation(); savedPresets = savedPresets.filter((x) => x.id !== p.id); localStorage.setItem(STORAGE_CUSTOM_PRESETS_KEY, JSON.stringify(savedPresets)); renderPresets(); return; }
+      draftTheme = { ...DEFAULT_THEME, ...p.theme, presetId: p.id }; applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); syncStudioUI();
     });
-    return card;
+    return c;
   };
-  colorPresetsGrid.innerHTML = ""; COLOR_PRESETS.forEach((p) => colorPresetsGrid.appendChild(makeCard(p)));
-  scenePresetsGrid.innerHTML = ""; SCENE_PRESETS.forEach((p) => scenePresetsGrid.appendChild(makeCard(p)));
-  savedPresetsGrid.innerHTML = ""; savedPresetsSection.classList.toggle("hidden", savedPresets.length === 0);
-  savedPresets.forEach((p) => savedPresetsGrid.appendChild(makeCard(p, true)));
+  $("color-presets-grid").innerHTML = ""; COLOR_PRESETS.forEach((p) => $("color-presets-grid").appendChild(makeCard(p)));
+  $("scene-presets-grid").innerHTML = ""; SCENE_PRESETS.forEach((p) => $("scene-presets-grid").appendChild(makeCard(p)));
+  $("saved-presets-grid").innerHTML = ""; $("saved-presets-section").classList.toggle("hidden", !savedPresets.length);
+  savedPresets.forEach((p) => $("saved-presets-grid").appendChild(makeCard(p, true)));
 }
-
 function renderGallery() {
-  galleryGrid.innerHTML = "";
+  const g = $("gallery-grid"); g.innerHTML = "";
   PREMADE_SCENES.forEach((sc) => {
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = `gallery-item ${draftTheme.sceneId === sc.id ? "active" : ""}`;
-    item.style.backgroundImage = sc.uri;
-    item.textContent = sc.name;
-    item.addEventListener("click", () => {
-      draftTheme.bgMode = "scene"; draftTheme.sceneId = sc.id; draftTheme.presetId = null;
-      applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); syncStudioUI();
-    });
-    galleryGrid.appendChild(item);
+    const it = document.createElement("button"); it.type = "button"; it.className = `gallery-item ${draftTheme.sceneId === sc.id ? "active" : ""}`;
+    it.style.backgroundImage = sc.uri; it.textContent = sc.name;
+    it.addEventListener("click", () => { draftTheme.bgMode = "scene"; draftTheme.sceneId = sc.id; draftTheme.presetId = null; applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); syncStudioUI(); });
+    g.appendChild(it);
   });
 }
-
 function renderColorSlots() {
-  colorSlotsWrap.innerHTML = "";
+  const w = $("color-slots"); w.innerHTML = "";
   COLOR_SLOTS.forEach((slot) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = `color-slot-btn ${activeColorSlot === slot.key ? "active" : ""}`;
-    btn.innerHTML = `<span>${slot.label}</span><span class="slot-swatch" style="background:${draftTheme[slot.key]}"></span>`;
-    btn.addEventListener("click", () => { activeColorSlot = slot.key; syncStudioUI(); });
-    colorSlotsWrap.appendChild(btn);
+    const b = document.createElement("button"); b.type = "button"; b.className = `color-slot-btn ${activeColorSlot === slot.key ? "active" : ""}`;
+    b.innerHTML = `<span>${slot.label}</span><span class="slot-swatch" style="background:${draftTheme[slot.key]}"></span>`;
+    b.addEventListener("click", () => { activeColorSlot = slot.key; syncStudioUI(); });
+    w.appendChild(b);
   });
 }
-
 function renderColorHistory() {
-  colorHistorySwatches.innerHTML = "";
-  const list = colorHistory.length > 0 ? colorHistory : [...new Set(COLOR_SLOTS.map((s) => (draftTheme || activeTheme)[s.key].toUpperCase()))];
+  const w = $("color-history-swatches"); w.innerHTML = "";
+  const list = colorHistory.length ? colorHistory : [...new Set(COLOR_SLOTS.map((s) => (draftTheme || activeTheme)[s.key].toUpperCase()))];
   list.forEach((hex) => {
-    const sw = document.createElement("button");
-    sw.type = "button"; sw.className = "hist-swatch"; sw.style.background = hex; sw.title = hex;
+    const sw = document.createElement("button"); sw.type = "button"; sw.className = "hist-swatch"; sw.style.background = hex; sw.title = hex;
     sw.addEventListener("click", () => { applyDraftSlotColor(hex); pushColorHistory(hex); });
-    colorHistorySwatches.appendChild(sw);
+    w.appendChild(sw);
   });
 }
 
-themeBtn.addEventListener("click", openThemeStudio);
-closeThemeBtn.addEventListener("click", cancelThemeStudio);
-cancelThemeBtn.addEventListener("click", cancelThemeStudio);
-applyThemeBtn.addEventListener("click", applyThemeStudio);
-studioTabs.forEach((t) => t.addEventListener("click", () => {
+$("theme-btn").addEventListener("click", openThemeStudio);
+$("close-theme-btn").addEventListener("click", cancelThemeStudio);
+$("cancel-theme-btn").addEventListener("click", cancelThemeStudio);
+$("apply-theme-btn").addEventListener("click", applyThemeStudio);
+document.querySelectorAll(".studio-tab").forEach((t) => t.addEventListener("click", () => {
   activeStudioTab = t.dataset.studioTab;
-  studioTabs.forEach((x) => x.classList.toggle("active", x === t));
-  studioPanePresets.classList.toggle("hidden", activeStudioTab !== "presets");
-  studioPaneCustom.classList.toggle("hidden", activeStudioTab !== "custom");
+  document.querySelectorAll(".studio-tab").forEach((x) => x.classList.toggle("active", x === t));
+  $("studio-pane-presets").classList.toggle("hidden", activeStudioTab !== "presets");
+  $("studio-pane-custom").classList.toggle("hidden", activeStudioTab !== "custom");
 }));
-sourceTabs.forEach((t) => t.addEventListener("click", () => {
-  draftTheme.bgMode = t.dataset.bgMode; draftTheme.presetId = null;
-  applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); syncStudioUI();
+document.querySelectorAll(".source-tab").forEach((t) => t.addEventListener("click", () => {
+  draftTheme.bgMode = t.dataset.bgMode; draftTheme.presetId = null; applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); syncStudioUI();
 }));
-uploadBgBtn.addEventListener("click", () => { bgImageInput.value = ""; bgImageInput.click(); });
-bgImageInput.addEventListener("change", () => {
-  const file = bgImageInput.files?.[0];
-  if (!file) return;
-  const r = new FileReader();
-  r.onload = () => { draftUploadedBgDataUrl = r.result; draftTheme.bgMode = "upload"; draftTheme.presetId = null; applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); syncStudioUI(); };
-  r.readAsDataURL(file);
+$("upload-bg-btn").addEventListener("click", () => { $("bg-image-input").value = ""; $("bg-image-input").click(); });
+$("bg-image-input").addEventListener("change", () => {
+  const f = $("bg-image-input").files?.[0]; if (!f) return;
+  const r = new FileReader(); r.onload = () => { draftUploadedBgDataUrl = r.result; draftTheme.bgMode = "upload"; draftTheme.presetId = null; applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); syncStudioUI(); };
+  r.readAsDataURL(f);
 });
-themeTimerBox.addEventListener("change", () => { draftTheme.timerBackdrop = themeTimerBox.checked; applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); });
-themeScrambleBox.addEventListener("change", () => { draftTheme.scrambleBox = themeScrambleBox.checked; applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); });
-const bindDraftSlider = (el, key, lbl, suf) => el.addEventListener("input", () => {
-  draftTheme[key] = Number(el.value); draftTheme.presetId = null; lbl.textContent = `${el.value}${suf}`;
-  applyThemeToDOM(draftTheme, draftUploadedBgDataUrl);
+$("theme-timer-box").addEventListener("change", () => { draftTheme.timerBackdrop = $("theme-timer-box").checked; applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); });
+$("theme-scramble-box").addEventListener("change", () => { draftTheme.scrambleBox = $("theme-scramble-box").checked; applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); });
+[["theme-bg-blur", "bgBlur", "bg-blur-val", "px"], ["theme-bg-dim", "bgDim", "bg-dim-val", "%"], ["theme-bg-posy", "bgPosY", "bg-posy-val", "%"], ["theme-bg-scale", "bgScale", "bg-scale-val", "%"], ["theme-sidebar-alpha", "sidebarAlpha", "sidebar-alpha-val", "%"], ["theme-sidebar-blur", "sidebarBlur", "sidebar-blur-val", "px"], ["theme-radius", "radius", "radius-val", "px"]].forEach(([id, k, lbl, suf]) => {
+  $(id).addEventListener("input", () => { draftTheme[k] = Number($(id).value); draftTheme.presetId = null; $(lbl).textContent = `${$(id).value}${suf}`; applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); });
 });
-bindDraftSlider(themeBgBlur, "bgBlur", bgBlurVal, "px");
-bindDraftSlider(themeBgDim, "bgDim", bgDimVal, "%");
-bindDraftSlider(themeBgPosY, "bgPosY", bgPosYVal, "%");
-bindDraftSlider(themeBgScale, "bgScale", bgScaleVal, "%");
-bindDraftSlider(themeSidebarAlpha, "sidebarAlpha", sidebarAlphaVal, "%");
-bindDraftSlider(themeSidebarBlur, "sidebarBlur", sidebarBlurVal, "px");
-bindDraftSlider(themeRadius, "radius", radiusVal, "px");
-themeTimerFont.addEventListener("change", () => { draftTheme.timerFont = themeTimerFont.value; applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); });
-themeUiFont.addEventListener("change", () => { draftTheme.uiFont = themeUiFont.value; applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); });
-saveCustomPresetBtn.addEventListener("click", () => {
+$("theme-timer-font").addEventListener("change", () => { draftTheme.timerFont = $("theme-timer-font").value; applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); });
+$("theme-ui-font").addEventListener("change", () => { draftTheme.uiFont = $("theme-ui-font").value; applyThemeToDOM(draftTheme, draftUploadedBgDataUrl); });
+$("save-custom-preset-btn").addEventListener("click", () => {
   if (!draftTheme) return;
   const name = prompt("Name your custom theme preset:", "My Custom Vibe");
   if (!name || !name.trim()) return;
   const id = `custom-${Date.now()}`;
-  savedPresets.push({ id, name: name.trim(), desc: draftTheme.bgMode === "scene" ? "Scene + Custom" : "Custom Colors", theme: { ...draftTheme, presetId: id } });
+  savedPresets.push({ id, name: name.trim(), desc: "Custom saved vibe", theme: { ...draftTheme, presetId: id } });
   localStorage.setItem(STORAGE_CUSTOM_PRESETS_KEY, JSON.stringify(savedPresets));
-  draftTheme.presetId = id; renderPresets(); showToast(`Saved preset "${name.trim()}"`);
+  draftTheme.presetId = id; renderPresets(); showToast(`Saved "${name.trim()}"`);
 });
 
-// === SECTION A6: SCRAMBLES, 3D PREVIEW, 15s INSPECTION & TIMER ===
-let inspStartTime = null;
-let inspIntervalId = null;
-let inspWarned8 = false;
-let inspWarned12 = false;
-let pendingPenalty = null;
-let armingInspTrigger = null;
+// === SECTION A5: SCRAMBLES, 15s INSPECTION & MAIN TIMER ===
+let inspStartTime = null, inspIntervalId = null, inspWarned8 = false, inspWarned12 = false, pendingPenalty = null, armingInspTrigger = null;
 
-function playBeep(freq = 880, duration = 0.09) {
+function playBeep(freq = 880, dur = 0.09) {
   if (!settings.inspectionAudio) return;
   try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(0.08, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(); osc.stop(ctx.currentTime + duration);
-    setTimeout(() => ctx.close(), 350);
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    const c = new AC(), o = c.createOscillator(), g = c.createGain();
+    o.type = "sine"; o.frequency.value = freq; g.gain.setValueAtTime(0.08, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
+    o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime + dur);
+    setTimeout(() => c.close(), 350);
   } catch {}
 }
 
 function localFallbackScramble(eventId) {
-  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-  const mods = ["", "'", "2"];
-  const genMoves = (faces, len) => {
-    const out = [];
-    let last = "", prev2 = "";
-    for (let i = 0; i < len; i++) {
-      let f;
-      do { f = pick(faces); } while (f === last || (f[0] === last[0] && f === prev2));
-      prev2 = last; last = f;
-      out.push(f + pick(mods));
-    }
+  const pick = (a) => a[Math.floor(Math.random() * a.length)], mods = ["", "'", "2"];
+  const gen = (faces, len) => {
+    const out = []; let last = "", prev2 = "";
+    for (let i = 0; i < len; i++) { let f; do { f = pick(faces); } while (f === last || (f[0] === last[0] && f === prev2)); prev2 = last; last = f; out.push(f + pick(mods)); }
     return out.join(" ");
   };
-  if (eventId === "222") return genMoves(["U", "R", "F"], 9);
-  if (eventId === "444") return genMoves(["U", "D", "R", "L", "F", "B", "Uw", "Rw", "Fw"], 40);
-  if (eventId === "555") return genMoves(["U", "D", "R", "L", "F", "B", "Uw", "Dw", "Rw", "Lw", "Fw", "Bw"], 60);
-  if (eventId === "666" || eventId === "777") return genMoves(["U", "D", "R", "L", "F", "B", "Uw", "Dw", "Rw", "Lw", "Fw", "Bw", "3Uw", "3Rw", "3Fw"], 80);
-  if (eventId === "pyram") return genMoves(["U", "L", "R", "B"], 10);
-  if (eventId === "skewb") return genMoves(["U", "L", "R", "B"], 9);
-  return genMoves(["U", "D", "R", "L", "F", "B"], 20);
+  if (eventId === "222") return gen(["U", "R", "F"], 9);
+  if (eventId === "444") return gen(["U", "D", "R", "L", "F", "B", "Uw", "Rw", "Fw"], 40);
+  if (eventId === "555") return gen(["U", "D", "R", "L", "F", "B", "Uw", "Dw", "Rw", "Lw", "Fw", "Bw"], 60);
+  if (eventId === "666" || eventId === "777") return gen(["U", "D", "R", "L", "F", "B", "Uw", "Dw", "Rw", "Lw", "Fw", "Bw", "3Uw", "3Rw", "3Fw"], 80);
+  if (eventId === "pyram") return gen(["U", "L", "R", "B"], 10);
+  if (eventId === "skewb") return gen(["U", "L", "R", "B"], 9);
+  return gen(["U", "D", "R", "L", "F", "B"], 20);
 }
 
 async function generateScramble(eventId) {
-  if (!randomScrambleForEvent) {
-    ensureScramblerLoaded();
-    return { text: localFallbackScramble(eventId), offline: true };
-  }
-  const alg = await randomScrambleForEvent(eventId);
-  return { text: alg.toString(), offline: false };
+  if (!randomScrambleForEvent) { ensureScramblerLoaded(); return { text: localFallbackScramble(eventId), offline: true }; }
+  return { text: (await randomScrambleForEvent(eventId)).toString(), offline: false };
 }
 
 async function loadNextScramble(eventId) {
   scrambleStatusEl.textContent = "Generating...";
   try {
-    let result;
-    if (prefetchedScramble && prefetchedEvent === eventId) {
-      result = prefetchedScramble; prefetchedScramble = null; prefetchedEvent = null;
-    } else {
-      result = await generateScramble(eventId);
-    }
+    let r;
+    if (prefetchedScramble && prefetchedEvent === eventId) { r = prefetchedScramble; prefetchedScramble = null; prefetchedEvent = null; }
+    else r = await generateScramble(eventId);
     if (eventId === settings.event) {
-      currentScramble = result.text;
-      scrambleTextEl.textContent = currentScramble;
-      scrambleStatusEl.textContent = result.offline ? "Offline fallback (Wi-Fi)" : "";
+      currentScramble = r.text; scrambleTextEl.textContent = currentScramble;
+      scrambleStatusEl.textContent = r.offline ? "Offline fallback (Wi-Fi)" : "";
       updateScramblePreview();
-      if (!result.offline) prefetchScramble(eventId);
+      if (!r.offline) prefetchScramble(eventId);
     }
-  } catch (err) {
-    console.error(err);
-    currentScramble = localFallbackScramble(eventId);
-    scrambleTextEl.textContent = currentScramble;
-    scrambleStatusEl.textContent = "Offline fallback";
-  }
+  } catch { currentScramble = localFallbackScramble(eventId); scrambleTextEl.textContent = currentScramble; scrambleStatusEl.textContent = "Offline fallback"; }
 }
-
 async function prefetchScramble(eventId) {
-  try {
-    const next = await generateScramble(eventId);
-    if (eventId === settings.event && !next.offline) { prefetchedScramble = next; prefetchedEvent = eventId; }
-  } catch {}
+  try { const n = await generateScramble(eventId); if (eventId === settings.event && !n.offline) { prefetchedScramble = n; prefetchedEvent = eventId; } } catch {}
 }
 
 function updateScramblePreview() {
-  const puzzle = EVENT_TO_PUZZLE[settings.event] || "3x3x3";
-  const dim = settings.event === "clock" ? "2D" : settings.previewDim;
-  scramblePlayer.setAttribute("puzzle", puzzle);
-  scramblePlayer.setAttribute("visualization", dim);
-  scramblePlayer.setAttribute("experimental-setup-alg", currentScramble || "");
-  scramblePlayer.setAttribute("alg", "");
+  const puzzle = EVENT_TO_PUZZLE[settings.event] || "3x3x3", dim = settings.event === "clock" ? "2D" : settings.previewDim;
+  scramblePlayer.setAttribute("puzzle", puzzle); scramblePlayer.setAttribute("visualization", dim);
+  scramblePlayer.setAttribute("experimental-setup-alg", currentScramble || ""); scramblePlayer.setAttribute("alg", "");
+  scramblePlayer.setAttribute("camera-latitude-limit", "none"); scramblePlayer.setAttribute("experimental-drag-input", "auto");
   try { scramblePlayer.puzzle = puzzle; scramblePlayer.visualization = dim; scramblePlayer.experimentalSetupAlg = currentScramble || ""; scramblePlayer.alg = ""; } catch {}
-  previewModeBadge.textContent = dim;
-  toggleDimBtn.textContent = settings.previewDim === "3D" ? "Switch to 2D" : "Switch to 3D";
+  previewModeBadge.textContent = dim; toggleDimBtn.textContent = settings.previewDim === "3D" ? "Switch to 2D" : "Switch to 3D";
 }
 
 toggleDimBtn.addEventListener("click", () => { toggleDimBtn.blur(); updateSetting("previewDim", settings.previewDim === "3D" ? "2D" : "3D"); updateScramblePreview(); });
 resetCamBtn.addEventListener("click", () => { resetCamBtn.blur(); try { scramblePlayer.cameraLatitude = 30; scramblePlayer.cameraLongitude = 35; } catch {} });
 
-function setTimerState(nextState) {
-  timerState = nextState;
-  timerZone.dataset.state = nextState;
-  if (nextState !== "inspecting") delete timerZone.dataset.inspWarn;
+function setTimerState(next) {
+  timerState = next; timerZone.dataset.state = next;
+  if (next !== "inspecting") delete timerZone.dataset.inspWarn;
+  const hideUI = (next === "running" || next === "inspecting") && settings.focusMode;
+  appEl.classList.toggle("is-running", hideUI); document.body.classList.toggle("is-solving", hideUI);
+  if (hideUI) { advStatsOpen = false; advStatsDrawer.classList.add("hidden"); }
 
-  const hideUI = (nextState === "running" || nextState === "inspecting") && settings.focusMode;
-  if (hideUI) {
-    appEl.classList.add("is-running"); document.body.classList.add("is-solving");
-    advStatsOpen = false; advStatsDrawer.classList.add("hidden");
-  } else {
-    appEl.classList.remove("is-running"); document.body.classList.remove("is-solving");
-  }
-
-  if (nextState === "idle") {
-    timerHintText.textContent = settings.inspection ? "Tap SPACE or CLICK to inspect (15s)" : "Hold SPACE or CLICK to ready";
-  } else if (nextState === "inspecting") {
-    timerHintText.textContent = "Inspecting • Hold SPACE/CLICK to start (ESC cancels)";
-  } else if (nextState === "holding") {
-    timerDisplay.textContent = formatTime(0, settings.decimals);
-    timerHintText.textContent = settings.holdDelayMs > 0 ? "Keep holding..." : "Release to start";
-  } else if (nextState === "ready") {
-    timerDisplay.textContent = formatTime(0, settings.decimals);
-    timerHintText.textContent = "Release to start";
-  } else if (nextState === "running") {
-    timerHintText.textContent = "Running";
-  }
+  if (next === "idle") timerHintText.textContent = settings.inspection ? "Tap SPACE or CLICK to inspect (15s)" : "Hold SPACE or CLICK to ready";
+  else if (next === "inspecting") timerHintText.textContent = "Inspecting • Hold SPACE/CLICK to start (ESC cancels)";
+  else if (next === "holding") { timerDisplay.textContent = formatTime(0, settings.decimals); timerHintText.textContent = settings.holdDelayMs > 0 ? "Keep holding..." : "Release to start"; }
+  else if (next === "ready") { timerDisplay.textContent = formatTime(0, settings.decimals); timerHintText.textContent = "Release to start"; }
+  else if (next === "running") timerHintText.textContent = "Running";
 }
 
 function startInspection() {
-  clearInterval(inspIntervalId);
-  inspStartTime = performance.now();
-  inspWarned8 = false;
-  inspWarned12 = false;
-  pendingPenalty = null;
-  pbBanner.classList.add("hidden");
-  lastSolveActions.classList.add("hidden");
-  setTimerState("inspecting");
-  updateInspectionDisplay();
-
+  clearInterval(inspIntervalId); inspStartTime = performance.now(); inspWarned8 = false; inspWarned12 = false; pendingPenalty = null;
+  pbBanner.classList.add("hidden"); lastSolveActions.classList.add("hidden"); setTimerState("inspecting"); updateInspectionDisplay();
   inspIntervalId = setInterval(() => {
     if (inspStartTime === null) return;
     const elapsed = performance.now() - inspStartTime;
-
     if (elapsed >= 8000 && !inspWarned8) { inspWarned8 = true; playBeep(880, 0.08); }
-    if (elapsed >= 12000 && !inspWarned12) {
-      inspWarned12 = true;
-      playBeep(1046, 0.09);
-      setTimeout(() => playBeep(1046, 0.09), 130);
-    }
+    if (elapsed >= 12000 && !inspWarned12) { inspWarned12 = true; playBeep(1046, 0.09); setTimeout(() => playBeep(1046, 0.09), 130); }
     if (elapsed >= 17000 && timerState === "inspecting") {
-      clearInterval(inspIntervalId);
-      inspIntervalId = null;
-      inspStartTime = null;
-      playBeep(220, 0.22);
-      const solve = {
-        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
-        event: settings.event, rawMs: 1, penalty: "DNF", scramble: currentScramble, createdAt: Date.now(),
-      };
-      solves.push(solve);
-      saveSolves();
-      setTimerState("idle");
-      renderAll();
-      showToast("Inspection exceeded 17s — DNF recorded");
-      loadNextScramble(settings.event);
+      clearInterval(inspIntervalId); inspIntervalId = null; inspStartTime = null; playBeep(220, 0.22);
+      solves.push({ id: String(Date.now() + Math.random()), event: settings.event, rawMs: 1, penalty: "DNF", scramble: currentScramble, createdAt: Date.now() });
+      saveSolves(); setTimerState("idle"); renderAll(); showToast("Inspection > 17s — DNF"); loadNextScramble(settings.event);
       return;
     }
     if (timerState === "inspecting") updateInspectionDisplay();
   }, 50);
 }
-
 function updateInspectionDisplay() {
   if (inspStartTime === null) return;
   const elapsed = performance.now() - inspStartTime;
   if (elapsed < 15000) {
     timerDisplay.textContent = String(Math.ceil((15000 - elapsed) / 1000));
-    if (elapsed >= 12000) timerZone.dataset.inspWarn = "12";
-    else delete timerZone.dataset.inspWarn;
-  } else {
-    timerDisplay.textContent = "+2";
-    timerZone.dataset.inspWarn = "plus2";
-  }
+    if (elapsed >= 12000) timerZone.dataset.inspWarn = "12"; else delete timerZone.dataset.inspWarn;
+  } else { timerDisplay.textContent = "+2"; timerZone.dataset.inspWarn = "plus2"; }
 }
-
-function cancelInspection() {
-  clearInterval(inspIntervalId);
-  inspIntervalId = null;
-  inspStartTime = null;
-  pendingPenalty = null;
-  armingInspTrigger = null;
-  setTimerState("idle");
-  renderAll();
-}
-
-function beginHold(trigger) {
+function cancelInspection() { clearInterval(inspIntervalId); inspIntervalId = null; inspStartTime = null; pendingPenalty = null; armingInspTrigger = null; setTimerState("idle"); renderAll(); }
+function beginHold(trig) {
   if (timerState !== "idle" && timerState !== "inspecting") return;
-  activeTrigger = trigger; clearTimeout(holdTimeoutId);
-  pbBanner.classList.add("hidden");
+  activeTrigger = trig; clearTimeout(holdTimeoutId); pbBanner.classList.add("hidden");
   if (settings.holdDelayMs <= 0) { setTimerState("ready"); return; }
-  setTimerState("holding");
-  holdTimeoutId = setTimeout(() => { if (timerState === "holding") setTimerState("ready"); }, settings.holdDelayMs);
+  setTimerState("holding"); holdTimeoutId = setTimeout(() => { if (timerState === "holding") setTimerState("ready"); }, settings.holdDelayMs);
 }
-
 function cancelHold() {
   clearTimeout(holdTimeoutId); holdTimeoutId = null; activeTrigger = null;
-  if (inspStartTime !== null) {
-    setTimerState("inspecting");
-    updateInspectionDisplay();
-  } else {
-    setTimerState("idle");
-    renderAll();
-  }
+  if (inspStartTime !== null) { setTimerState("inspecting"); updateInspectionDisplay(); } else { setTimerState("idle"); renderAll(); }
 }
-
 function startTimer() {
   clearTimeout(holdTimeoutId); holdTimeoutId = null; activeTrigger = null;
   if (inspStartTime !== null) {
-    const inspElapsed = performance.now() - inspStartTime;
-    clearInterval(inspIntervalId); inspIntervalId = null; inspStartTime = null;
-    pendingPenalty = inspElapsed > 17000 ? "DNF" : inspElapsed > 15000 ? "+2" : null;
-  } else {
-    pendingPenalty = null;
-  }
-
-  startTime = performance.now();
-  setTimerState("running");
-  lastSolveActions.classList.add("hidden");
-  const tick = () => {
-    if (timerState !== "running") return;
-    timerDisplay.textContent = formatTime(performance.now() - startTime, settings.decimals);
-    rafId = requestAnimationFrame(tick);
-  };
+    const ie = performance.now() - inspStartTime; clearInterval(inspIntervalId); inspIntervalId = null; inspStartTime = null;
+    pendingPenalty = ie > 17000 ? "DNF" : ie > 15000 ? "+2" : null;
+  } else pendingPenalty = null;
+  startTime = performance.now(); setTimerState("running"); lastSolveActions.classList.add("hidden");
+  const tick = () => { if (timerState !== "running") return; timerDisplay.textContent = formatTime(performance.now() - startTime, settings.decimals); rafId = requestAnimationFrame(tick); };
   rafId = requestAnimationFrame(tick);
 }
-
-function stopTimer(stopTrigger) {
-  const stopTime = performance.now();
-  cancelAnimationFrame(rafId);
-  rafId = null;
-  const elapsedMs = Math.max(1, Math.round(stopTime - startTime));
-  activeTrigger = stopTrigger;
-
-  const prevEventSolves = getCurrentEventSolves();
-  const solve = {
-    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
-    event: settings.event,
-    rawMs: elapsedMs,
-    penalty: pendingPenalty,
-    scramble: currentScramble,
-    createdAt: Date.now(),
-  };
-  pendingPenalty = null;
-
-  // 1. Immediately paint the result and un-hide the UI on frame 1
-  timerDisplay.textContent = formatSolve(solve, settings.decimals);
-  setTimerState("stopping");
-
+function stopTimer(stopTrig) {
+  const stopTime = performance.now(); cancelAnimationFrame(rafId); rafId = null;
+  const elapsedMs = Math.max(1, Math.round(stopTime - startTime)); activeTrigger = stopTrig; setTimerState("stopping");
+  const prev = getCurrentEventSolves();
+  const solve = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()), event: settings.event, rawMs: elapsedMs, penalty: pendingPenalty, scramble: currentScramble, createdAt: Date.now() };
+  pendingPenalty = null; timerDisplay.textContent = formatSolve(solve, settings.decimals);
+  lastSolveActions.classList.remove("hidden"); lastPlus2Btn.classList.remove("active"); lastDnfBtn.classList.remove("active");
   solves.push(solve);
-  saveSolves();
-
-  // 2. Defer heavy graphs, list rendering, and next scramble to the next tick
-  setTimeout(() => {
-    renderAll();
-    loadNextScramble(settings.event);
-    checkAndCelebratePB(prevEventSolves, solve);
-  }, 0);
+  setTimeout(() => { saveSolves(); renderAll(); checkAndCelebratePB(prev, solve); loadNextScramble(settings.event); }, 0);
 }
-
 function finishStopCycle() { if (timerState === "stopping") { activeTrigger = null; setTimerState("idle"); } }
 
-const isModalOpen = () => !themeModal.classList.contains("hidden") || !settingsModal.classList.contains("hidden") || !solveModal.classList.contains("hidden") || !profileModal.classList.contains("hidden");
+const isModalOpen = () => !$("theme-modal").classList.contains("hidden") || !$("settings-modal").classList.contains("hidden") || !$("solve-modal").classList.contains("hidden") || !$("profile-modal").classList.contains("hidden");
 
 window.addEventListener("keydown", (e) => {
-  if (isModalOpen()) {
-    if (e.key === "Escape") { if (!themeModal.classList.contains("hidden")) cancelThemeStudio(); else closeModals(); }
-    return;
-  }
+  if (isModalOpen()) { if (e.key === "Escape") { if (!$("theme-modal").classList.contains("hidden")) cancelThemeStudio(); else closeModals(); } return; }
+  if (activeTab === "improvement") { handleImprovementKeyDown(e); return; }
   if (activeTab !== "timer") return;
-
-  if (e.key === "Escape" && (timerState === "inspecting" || timerState === "holding" || timerState === "ready")) {
-    clearTimeout(holdTimeoutId); holdTimeoutId = null; activeTrigger = null;
-    cancelInspection();
-    return;
-  }
-
+  if (e.key === "Escape" && (timerState === "inspecting" || timerState === "holding" || timerState === "ready")) { clearTimeout(holdTimeoutId); holdTimeoutId = null; activeTrigger = null; cancelInspection(); return; }
   if (e.code === "Space") {
-    e.preventDefault();
-    if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+    e.preventDefault(); if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
     if (e.repeat) return;
-
-    if (timerState === "idle") {
-      if (settings.inspection) armingInspTrigger = "space";
-      else beginHold("space");
-    } else if (timerState === "inspecting") {
-      beginHold("space");
-    } else if (timerState === "running") {
-      stopTimer("space");
-    }
+    if (timerState === "idle") { if (settings.inspection) armingInspTrigger = "space"; else beginHold("space"); }
+    else if (timerState === "inspecting") beginHold("space");
+    else if (timerState === "running") stopTimer("space");
   }
 });
-
 window.addEventListener("keyup", (e) => {
-  if (e.code !== "Space" || activeTab !== "timer") return;
+  if (e.code !== "Space") return;
   e.preventDefault();
-  if (armingInspTrigger === "space" && timerState === "idle") {
-    armingInspTrigger = null;
-    startInspection();
-  } else if (timerState === "holding" && activeTrigger === "space") cancelHold();
+  if (activeTab === "improvement") { handleImprovementKeyUp(e); return; }
+  if (activeTab !== "timer") return;
+  if (armingInspTrigger === "space" && timerState === "idle") { armingInspTrigger = null; startInspection(); }
+  else if (timerState === "holding" && activeTrigger === "space") cancelHold();
   else if (timerState === "ready" && activeTrigger === "space") startTimer();
   else if (timerState === "stopping" && activeTrigger === "space") finishStopCycle();
 });
-
 window.addEventListener("pointerdown", (e) => {
   if (timerState !== "running") return;
   if (e.pointerType === "mouse" && e.button !== 0) return;
-  e.preventDefault(); e.stopPropagation();
-  suppressNextClick = true; setTimeout(() => (suppressNextClick = false), 100);
-  stopTimer("pointer");
+  e.preventDefault(); e.stopPropagation(); suppressNextClick = true; setTimeout(() => (suppressNextClick = false), 100); stopTimer("pointer");
 }, { capture: true });
-
 window.addEventListener("click", (e) => { if (suppressNextClick) { e.preventDefault(); e.stopPropagation(); suppressNextClick = false; } }, { capture: true });
-
 timerZone.addEventListener("pointerdown", (e) => {
   if (isModalOpen() || activeTab !== "timer") return;
   if (e.pointerType === "mouse" && e.button !== 0) return;
   if (e.target.closest("button, select, input, a, .scramble-text, .adv-stats-drawer")) return;
-
-  if (timerState === "idle") {
-    e.preventDefault();
-    if (settings.inspection) armingInspTrigger = "pointer";
-    else beginHold("pointer");
-  } else if (timerState === "inspecting") {
-    e.preventDefault();
-    beginHold("pointer");
-  }
+  if (timerState === "idle") { e.preventDefault(); if (settings.inspection) armingInspTrigger = "pointer"; else beginHold("pointer"); }
+  else if (timerState === "inspecting") { e.preventDefault(); beginHold("pointer"); }
 });
-
 window.addEventListener("pointerup", () => {
-  if (armingInspTrigger === "pointer" && timerState === "idle") {
-    armingInspTrigger = null;
-    startInspection();
-  } else if (timerState === "holding" && activeTrigger === "pointer") cancelHold();
+  if (activeTab === "improvement") { handleImprovementPointerUp(); return; }
+  if (armingInspTrigger === "pointer" && timerState === "idle") { armingInspTrigger = null; startInspection(); }
+  else if (timerState === "holding" && activeTrigger === "pointer") cancelHold();
   else if (timerState === "ready" && activeTrigger === "pointer") startTimer();
   else if (timerState === "stopping" && activeTrigger === "pointer") finishStopCycle();
 });
+window.addEventListener("pointercancel", () => { armingInspTrigger = null; if (timerState === "holding" || timerState === "ready") cancelHold(); else if (timerState === "stopping") finishStopCycle(); });
+window.addEventListener("blur", () => { armingInspTrigger = null; if (timerState === "holding" || timerState === "ready") cancelHold(); else if (timerState === "stopping") finishStopCycle(); });
 
-window.addEventListener("pointercancel", () => {
-  armingInspTrigger = null;
-  if (timerState === "holding" || timerState === "ready") cancelHold();
-  else if (timerState === "stopping") finishStopCycle();
-});
-window.addEventListener("blur", () => {
-  armingInspTrigger = null;
-  if (timerState === "holding" || timerState === "ready") cancelHold();
-  else if (timerState === "stopping") finishStopCycle();
-});
-
-// === SECTION A7: PB CELEBRATION ENGINE ===
+// === SECTION A6: PB CELEBRATION & STATS ===
+const getEffectiveMs = (s) => s.penalty === "DNF" ? Infinity : s.penalty === "+2" ? s.rawMs + 2000 : s.rawMs;
+function formatTime(ms, dec = 2) {
+  if (ms === Infinity || ms == null || Number.isNaN(ms)) return "DNF";
+  const t = Math.max(0, Math.round(ms)), m = Math.floor(t / 60000), s = Math.floor((t % 60000) / 1000), r = t % 1000;
+  const f = dec === 3 ? String(r).padStart(3, "0") : String(Math.floor(r / 10)).padStart(2, "0");
+  return m > 0 ? `${m}:${String(s).padStart(2, "0")}.${f}` : `${s}.${f}`;
+}
+const formatSolve = (s, dec = 2) => s.penalty === "DNF" ? "DNF" : s.penalty === "+2" ? `${formatTime(getEffectiveMs(s), dec)}+` : formatTime(getEffectiveMs(s), dec);
+function calculateTrimmedAverage(list, size) {
+  if (list.length < size) return null;
+  const r = list.slice(-size).map(getEffectiveMs).sort((a, b) => (a === b ? 0 : a < b ? -1 : 1)).slice(1, size - 1);
+  return r.some((t) => t === Infinity) ? Infinity : r.reduce((a, t) => a + t, 0) / r.length;
+}
+function calculateSessionMean(list) { const v = list.map(getEffectiveMs).filter((t) => t !== Infinity); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : (list.length ? Infinity : null); }
+function calculateBest(list) { const v = list.map(getEffectiveMs).filter((t) => t !== Infinity); return v.length ? Math.min(...v) : (list.length ? Infinity : null); }
+const getCurrentEventSolves = () => solves.filter((s) => s.event === settings.event);
+function calculateMeanOfSlice(sl) { const t = sl.map(getEffectiveMs); return t.some((x) => x === Infinity) ? Infinity : t.reduce((a, b) => a + b, 0) / t.length; }
 function getBestRollingAvg(list, size, isMean = false) {
   if (list.length < size) return null;
   let best = Infinity;
-  for (let i = size; i <= list.length; i++) {
-    const slice = list.slice(i - size, i);
-    const val = isMean ? calculateMeanOfSlice(slice) : calculateTrimmedAverage(slice, size);
-    if (val !== null && val < best) best = val;
-  }
+  for (let i = size; i <= list.length; i++) { const val = isMean ? calculateMeanOfSlice(list.slice(i - size, i)) : calculateTrimmedAverage(list.slice(i - size, i), size); if (val !== null && val < best) best = val; }
   return best === Infinity ? null : best;
 }
 
-function calculateMeanOfSlice(slice) {
-  const times = slice.map(getEffectiveMs);
-  if (times.some((t) => t === Infinity)) return Infinity;
-  return times.reduce((a, b) => a + b, 0) / times.length;
-}
-
 function checkAndCelebratePB(prevList, newSolve) {
-  const newTime = getEffectiveMs(newSolve);
-  if (newTime === Infinity) return;
-  const fullList = [...prevList, newSolve];
-  const records = [];
-
-  const prevBestSingle = calculateBest(prevList);
-  if (prevBestSingle !== null && prevBestSingle !== Infinity && newTime < prevBestSingle) {
-    records.push(`NEW SINGLE PB! (-${formatTime(prevBestSingle - newTime, settings.decimals)}s)`);
-  }
-
-  [[5, "AO5"], [12, "AO12"], [50, "AO50"], [100, "AO100"]].forEach(([size, label]) => {
-    if (fullList.length >= size) {
-      const cur = calculateTrimmedAverage(fullList, size);
-      const prevBest = getBestRollingAvg(prevList, size);
-      if (cur !== null && cur !== Infinity && prevBest !== null && cur < prevBest) {
-        records.push(`NEW BEST ${label}! (${formatTime(cur, settings.decimals)})`);
-      }
-    }
+  const nt = getEffectiveMs(newSolve); if (nt === Infinity) return;
+  const full = [...prevList, newSolve], recs = [], pBest = calculateBest(prevList);
+  if (pBest !== null && pBest !== Infinity && nt < pBest) recs.push(`NEW SINGLE PB! (-${formatTime(pBest - nt, settings.decimals)}s)`);
+  [[5, "AO5"], [12, "AO12"], [50, "AO50"], [100, "AO100"]].forEach(([sz, lbl]) => {
+    if (full.length >= sz) { const cur = calculateTrimmedAverage(full, sz), pb = getBestRollingAvg(prevList, sz); if (cur !== null && cur !== Infinity && pb !== null && cur < pb) recs.push(`NEW BEST ${lbl}! (${formatTime(cur, settings.decimals)})`); }
   });
-
-  if (records.length === 0) return;
-  pbBanner.textContent = records[0];
-  pbBanner.classList.remove("hidden");
-  clearTimeout(pbTimeoutId);
-  pbTimeoutId = setTimeout(() => pbBanner.classList.add("hidden"), 4000);
-  launchConfetti();
-}
-
-function launchConfetti() {
-  const ctx = confettiCanvas.getContext("2d");
-  confettiCanvas.width = window.innerWidth;
-  confettiCanvas.height = window.innerHeight;
-  const colors = [activeTheme.accentColor, activeTheme.textColor, activeTheme.readyColor, "#ffffff"];
-  const cx = confettiCanvas.width / 2, cy = confettiCanvas.height * 0.45;
-
-  const particles = Array.from({ length: 65 }, () => {
-    const angle = Math.random() * Math.PI * 2;
-    const speed = 3 + Math.random() * 8;
-    return {
-      x: cx, y: cy, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 3,
-      size: 4 + Math.random() * 4, color: colors[Math.floor(Math.random() * colors.length)],
-      alpha: 1, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.25,
-    };
-  });
-
+  if (!recs.length) return;
+  pbBanner.textContent = recs[0]; pbBanner.classList.remove("hidden"); clearTimeout(pbTimeoutId); pbTimeoutId = setTimeout(() => pbBanner.classList.add("hidden"), 4000);
+  const ctx2 = confettiCanvas.getContext("2d"); confettiCanvas.width = window.innerWidth; confettiCanvas.height = window.innerHeight;
+  const cols = [activeTheme.accentColor, activeTheme.textColor, activeTheme.readyColor, "#ffffff"], cx = confettiCanvas.width / 2, cy = confettiCanvas.height * 0.45;
+  const parts = Array.from({ length: 65 }, () => { const a = Math.random() * Math.PI * 2, sp = 3 + Math.random() * 8; return { x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 3, sz: 4 + Math.random() * 4, col: cols[Math.floor(Math.random() * cols.length)], a: 1, r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.25 }; });
   const step = () => {
-    ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
-    let alive = false;
-    for (const p of particles) {
-      p.x += p.vx; p.y += p.vy; p.vy += 0.22; p.rot += p.vr; p.alpha -= 0.015;
-      if (p.alpha > 0) {
-        alive = true;
-        ctx.save(); ctx.globalAlpha = p.alpha; ctx.translate(p.x, p.y); ctx.rotate(p.rot);
-        ctx.fillStyle = p.color; ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.65);
-        ctx.restore();
-      }
-    }
-    if (alive) requestAnimationFrame(step);
-    else ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+    ctx2.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height); let alive = false;
+    for (const p of parts) { p.x += p.vx; p.y += p.vy; p.vy += 0.22; p.r += p.vr; p.a -= 0.015; if (p.a > 0) { alive = true; ctx2.save(); ctx2.globalAlpha = p.a; ctx2.translate(p.x, p.y); ctx2.rotate(p.r); ctx2.fillStyle = p.col; ctx2.fillRect(-p.sz / 2, -p.sz / 2, p.sz, p.sz * 0.65); ctx2.restore(); } }
+    if (alive) requestAnimationFrame(step); else ctx2.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
   };
   requestAnimationFrame(step);
 }
 
-// === SECTION A8: STATS, INTERACTIVE TREND & VISUAL ANALYTICS ===
-const getEffectiveMs = (s) => s.penalty === "DNF" ? Infinity : s.penalty === "+2" ? s.rawMs + 2000 : s.rawMs;
-
-function formatTime(ms, decimals = 2) {
-  if (ms === Infinity || ms == null || Number.isNaN(ms)) return "DNF";
-  const totalMs = Math.max(0, Math.round(ms));
-  const min = Math.floor(totalMs / 60000), sec = Math.floor((totalMs % 60000) / 1000), rem = totalMs % 1000;
-  const frac = decimals === 3 ? String(rem).padStart(3, "0") : String(Math.floor(rem / 10)).padStart(2, "0");
-  return min > 0 ? `${min}:${String(sec).padStart(2, "0")}.${frac}` : `${sec}.${frac}`;
-}
-
-function formatSolve(s, dec = 2) {
-  if (s.penalty === "DNF") return "DNF";
-  const b = formatTime(getEffectiveMs(s), dec);
-  return s.penalty === "+2" ? `${b}+` : b;
-}
-
-function calculateTrimmedAverage(list, size) {
-  if (list.length < size) return null;
-  const recent = list.slice(-size).map(getEffectiveMs).sort((a, b) => (a === b ? 0 : a < b ? -1 : 1));
-  const mid = recent.slice(1, size - 1);
-  return mid.some((t) => t === Infinity) ? Infinity : mid.reduce((a, t) => a + t, 0) / mid.length;
-}
-
-function calculateSessionMean(list) {
-  const v = list.map(getEffectiveMs).filter((t) => t !== Infinity);
-  return v.length === 0 ? (list.length > 0 ? Infinity : null) : v.reduce((a, b) => a + b, 0) / v.length;
-}
-
-function calculateBest(list) {
-  const v = list.map(getEffectiveMs).filter((t) => t !== Infinity);
-  return v.length === 0 ? (list.length > 0 ? Infinity : null) : Math.min(...v);
-}
-
-const getCurrentEventSolves = () => solves.filter((s) => s.event === settings.event);
-
 function renderSparkline(eventSolves) {
-  const indexed = eventSolves
-    .map((s, idx) => ({ num: idx + 1, ms: getEffectiveMs(s), label: formatSolve(s, settings.decimals) }))
-    .filter((d) => d.ms !== Infinity);
-
-  const limit = settings.trendRange === "all" ? indexed.length : Number(settings.trendRange);
-  const data = indexed.slice(-limit);
-
-  if (data.length < 2) {
-    sparklineWrap.innerHTML = `<span class="sparkline-empty">Complete 2+ solves for graph</span>`;
-    return;
-  }
+  const indexed = eventSolves.map((s, idx) => ({ num: idx + 1, ms: getEffectiveMs(s), label: formatSolve(s, settings.decimals) })).filter((d) => d.ms !== Infinity);
+  const data = indexed.slice(-(settings.trendRange === "all" ? indexed.length : Number(settings.trendRange)));
+  if (data.length < 2) { sparklineWrap.innerHTML = `<span class="sparkline-empty">Complete 2+ solves for graph</span>`; return; }
 
   let series;
   if (settings.trendFlatten) {
-    // Break the entire session into 4 equal macro sections (or fewer if under 4 solves)
-    const numSections = Math.min(4, data.length);
-    const bSize = data.length / numSections;
-    series = [];
-
-    for (let b = 0; b < numSections; b++) {
-      const sIdx = Math.round(b * bSize);
-      const eIdx = Math.min(data.length, Math.round((b + 1) * bSize));
-      const slice = data.slice(sIdx, Math.max(sIdx + 1, eIdx));
-      const avg = slice.reduce((acc, x) => acc + x.ms, 0) / slice.length;
-      const firstNum = slice[0].num;
-      const lastNum = slice[slice.length - 1].num;
-
-      series.push({
-        num: `Part ${b + 1} (#${firstNum}–${lastNum})`,
-        plotMs: avg,
-        label: `${formatTime(avg, settings.decimals)} avg`,
-      });
+    const numSec = Math.min(4, data.length), bSize = data.length / numSec; series = [];
+    for (let b = 0; b < numSec; b++) {
+      const sI = Math.round(b * bSize), eI = Math.min(data.length, Math.round((b + 1) * bSize)), sl = data.slice(sI, Math.max(sI + 1, eI));
+      const avg = sl.reduce((a, x) => a + x.ms, 0) / sl.length;
+      series.push({ num: `Part ${b + 1} (#${sl[0].num}–${sl[sl.length - 1].num})`, plotMs: avg, label: `${formatTime(avg, settings.decimals)} avg` });
     }
-  } else {
-    series = data.map((d) => ({ num: `#${d.num}`, plotMs: d.ms, label: d.label }));
-  }
+  } else series = data.map((d) => ({ num: `#${d.num}`, plotMs: d.ms, label: d.label }));
 
-  const rawMin = Math.min(...series.map((s) => s.plotMs));
-  const rawMax = Math.max(...series.map((s) => s.plotMs));
-  const baseSpan = Math.max(200, rawMax - rawMin);
-
-  // Generous padding in Flatten mode so the line stays in the readable center band
-  const padMs = settings.trendFlatten ? Math.max(800, baseSpan * 0.35) : 0;
-  const min = Math.max(0, rawMin - padMs);
-  const max = rawMax + padMs;
-  const span = Math.max(1, max - min);
-
-  const w = 260, h = 98, pad = 16;
-  const clampY = (ms) => Math.max(pad, Math.min(h - pad, h - pad - ((ms - min) / span) * (h - pad * 2)));
-
-  const coords = series.map((d, i) => ({
-    ...d,
-    x: pad + (i / (series.length - 1)) * (w - pad * 2),
-    y: clampY(d.plotMs),
-  }));
-
+  const rMin = Math.min(...series.map((s) => s.plotMs)), rMax = Math.max(...series.map((s) => s.plotMs)), bSpan = Math.max(200, rMax - rMin);
+  const padMs = settings.trendFlatten ? Math.max(800, bSpan * 0.35) : 0, min = Math.max(0, rMin - padMs), max = rMax + padMs, span = Math.max(1, max - min);
+  const w = 260, h = 98, pad = 16, clampY = (ms) => Math.max(pad, Math.min(h - pad, h - pad - ((ms - min) / span) * (h - pad * 2)));
+  const coords = series.map((d, i) => ({ ...d, x: pad + (i / (series.length - 1)) * (w - pad * 2), y: clampY(d.plotMs) }));
   const poly = coords.map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
 
-  // Linear best-fit line across the 4 sections
   let trendLineSvg = "";
   if (settings.trendFlatten && coords.length >= 3) {
-    const n = coords.length;
-    const sumX = (n * (n - 1)) / 2;
-    const sumXX = (n * (n - 1) * (2 * n - 1)) / 6;
-    const sumY = coords.reduce((a, c) => a + c.plotMs, 0);
-    const sumXY = coords.reduce((a, c, i) => a + i * c.plotMs, 0);
-    const slope = (n * sumXX - sumX * sumX) ? (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX) : 0;
-    const intercept = (sumY - slope * sumX) / n;
-    const y0 = clampY(intercept);
-    const y1 = clampY(intercept + slope * (n - 1));
-
-    trendLineSvg = `<line x1="${coords[0].x.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${coords[n - 1].x.toFixed(1)}" y2="${y1.toFixed(1)}" stroke="currentColor" stroke-opacity="0.3" stroke-dasharray="4 3" stroke-width="1.4" />`;
+    const n = coords.length, sX = (n * (n - 1)) / 2, sXX = (n * (n - 1) * (2 * n - 1)) / 6, sY = coords.reduce((a, c) => a + c.plotMs, 0), sXY = coords.reduce((a, c, i) => a + i * c.plotMs, 0);
+    const slp = (n * sXX - sX * sX) ? (n * sXY - sX * sY) / (n * sXX - sX * sX) : 0, icp = (sY - slp * sX) / n;
+    trendLineSvg = `<line x1="${coords[0].x.toFixed(1)}" y1="${clampY(icp).toFixed(1)}" x2="${coords[n - 1].x.toFixed(1)}" y2="${clampY(icp + slp * (n - 1)).toFixed(1)}" stroke="currentColor" stroke-opacity="0.3" stroke-dasharray="4 3" stroke-width="1.4" />`;
   }
 
-  const dotRadius = settings.trendFlatten ? 3.5 : (coords.length <= 40 ? 2.2 : 0);
-  const dots = coords.map((c) => `
-    ${dotRadius > 0 ? `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${dotRadius}" fill="currentColor" stroke="var(--card-bg-rgba)" stroke-width="1.2" opacity="0.95" />` : ""}
-    <circle class="spark-hit" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="11" fill="transparent"
-      data-tip="${c.num} • ${c.label}" data-x="${(c.x / w) * 100}" data-y="${(c.y / h) * 100}" style="cursor:pointer;" />
+  const dotR = settings.trendFlatten ? 3.5 : (coords.length <= 40 ? 2.1 : 0), hitStep = Math.max(1, Math.floor(coords.length / 35));
+  const dots = coords.map((c, i) => `
+    ${dotR ? `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${dotR}" fill="currentColor" stroke="var(--card-bg-rgba)" stroke-width="1.2" opacity="0.95" />` : ""}
+    ${i % hitStep === 0 || i === coords.length - 1 ? `<circle class="spark-hit" cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="10" fill="transparent" data-tip="${c.num} • ${c.label}" style="cursor:pointer;" />` : ""}
   `).join("");
 
-  const scaleLabels = settings.trendFlatten
-    ? `<text x="6" y="11" fill="currentColor" opacity="0.45" font-size="8" font-family="monospace">${formatTime(rawMax, 1)}</text>
-       <text x="6" y="${h - 3}" fill="currentColor" opacity="0.45" font-size="8" font-family="monospace">${formatTime(rawMin, 1)}</text>`
-    : "";
-
-  sparklineWrap.innerHTML = `
-    <svg viewBox="0 0 ${w} ${h}" width="100%" height="100%" style="color: var(--accent-color)">
-      ${scaleLabels}
-      ${trendLineSvg}
-      <polyline fill="none" stroke="currentColor" stroke-width="${settings.trendFlatten ? 2.2 : 1.8}" stroke-opacity="0.95" stroke-linejoin="round" stroke-linecap="round" points="${poly}" />
-      ${dots}
-    </svg>
-    <div id="sparkline-tooltip" class="sparkline-tooltip hidden"></div>
-  `;
-
-  const tip = $("sparkline-tooltip");
+  sparklineWrap.innerHTML = `<svg viewBox="0 0 ${w} ${h}" width="100%" height="100%" style="color: var(--accent-color)">${settings.trendFlatten ? `<text x="6" y="11" fill="currentColor" opacity="0.45" font-size="8" font-family="monospace">${formatTime(rMax, 1)}</text><text x="6" y="${h - 3}" fill="currentColor" opacity="0.45" font-size="8" font-family="monospace">${formatTime(rMin, 1)}</text>` : ""}${trendLineSvg}<polyline fill="none" stroke="currentColor" stroke-width="${settings.trendFlatten ? 2.2 : 1.8}" stroke-opacity="0.95" stroke-linejoin="round" points="${poly}" />${dots}</svg>`;
   sparklineWrap.querySelectorAll(".spark-hit").forEach((hit) => {
-    hit.addEventListener("pointerenter", () => {
-      tip.textContent = hit.dataset.tip;
-      tip.style.left = `${Math.min(76, Math.max(24, Number(hit.dataset.x)))}%`;
-      tip.style.top = `${Math.max(16, Number(hit.dataset.y))}%`;
-      tip.classList.remove("hidden");
-    });
-    hit.addEventListener("pointerleave", () => tip.classList.add("hidden"));
+    hit.addEventListener("pointerenter", (e) => showTooltip(hit.dataset.tip, e.clientX, e.clientY));
+    hit.addEventListener("pointermove", (e) => showTooltip(hit.dataset.tip, e.clientX, e.clientY));
+    hit.addEventListener("pointerleave", hideTooltip);
   });
 }
 
-let advBracketStep = 5000;
-
 function renderAdvancedStats(eventSolves) {
-  const dec = settings.decimals;
-  const validEntries = eventSolves
-    .map((s, i) => ({ idx: i + 1, ms: getEffectiveMs(s), createdAt: s.createdAt }))
-    .filter((d) => d.ms !== Infinity);
-  const valid = validEntries.map((d) => d.ms);
-  const dnfCount = eventSolves.filter((s) => s.penalty === "DNF").length;
-  const plus2Count = eventSolves.filter((s) => s.penalty === "+2").length;
+  const dec = settings.decimals, validEntries = eventSolves.map((s, i) => ({ idx: i + 1, ms: getEffectiveMs(s), createdAt: s.createdAt })).filter((d) => d.ms !== Infinity), valid = validEntries.map((d) => d.ms);
+  const dnfC = eventSolves.filter((s) => s.penalty === "DNF").length, p2C = eventSolves.filter((s) => s.penalty === "+2").length;
+  advStatsSubtitle.textContent = `${eventSolves.length} solves (${valid.length} valid, ${dnfC} DNF, ${p2C} +2)`;
+  if (valid.length < 2) { advStatsBody.innerHTML = `<p class="muted-text">Complete at least 2 valid solves to unlock visual analytics.</p>`; return; }
 
-  advStatsSubtitle.textContent = `${eventSolves.length} solves (${valid.length} valid, ${dnfCount} DNF, ${plus2Count} +2)`;
-  const mean = calculateSessionMean(eventSolves);
-  const best = calculateBest(eventSolves);
-  const worst = valid.length ? Math.max(...valid) : null;
-  let stdDev = null, consistency = null;
-  if (valid.length >= 2 && mean !== null && mean !== Infinity) {
-    stdDev = Math.sqrt(valid.reduce((acc, t) => acc + (t - mean) ** 2, 0) / valid.length);
-    consistency = Math.max(0, 100 - (stdDev / mean) * 100);
-  }
-  advStatsTeaser.textContent = stdDev !== null ? `• σ ${formatTime(stdDev, dec)}s` : "";
+  const mean = calculateSessionMean(eventSolves), best = calculateBest(eventSolves), worst = Math.max(...valid);
+  const stdDev = Math.sqrt(valid.reduce((acc, t) => acc + (t - mean) ** 2, 0) / valid.length), consistency = Math.max(0, 100 - (stdDev / mean) * 100);
 
-  if (valid.length < 2) {
-    advStatsBody.innerHTML = `<p class="muted-text">Complete at least 2 valid solves to unlock visual analytics.</p>`;
-    return;
-  }
+  const allB = [{ label: "0–5s", min: 0, max: 5000 }, { label: "5–10s", min: 5000, max: 10000 }, { label: "10–15s", min: 10000, max: 15000 }, { label: "15–20s", min: 15000, max: 20000 }, { label: "20–25s", min: 20000, max: 25000 }, { label: "25–30s", min: 25000, max: 30000 }, { label: "30–45s", min: 30000, max: 45000 }, { label: "45s+", min: 45000, max: Infinity }].map((b) => { const it = valid.filter((t) => t >= b.min && t < b.max); return { ...b, count: it.length, avg: it.length ? it.reduce((a, x) => a + x, 0) / it.length : null }; });
+  const activeB = allB.slice(Math.max(0, allB.findIndex((b) => b.count > 0)), allB.length - [...allB].reverse().findIndex((b) => b.count > 0));
+  const maxB = Math.max(...activeB.map((b) => b.count), 1);
+  const bracketsHtml = activeB.map((b) => `<div class="bracket-row chart-tip-target" data-tip="${b.label}: ${b.count} solves (${Math.round((b.count / valid.length) * 100)}%)${b.avg ? ` • Avg ${formatTime(b.avg, dec)}` : ""}"><span>${b.label}</span><div class="bracket-track"><div class="bracket-fill" style="width:${Math.round((b.count / maxB) * 100)}%"></div></div><span class="bracket-val">${b.count} (${Math.round((b.count / valid.length) * 100)}%)</span></div>`).join("");
 
-  // 1. Time Distribution Brackets (5s or 2s toggleable)
-  let brackets = [];
-  if (advBracketStep === 5000) {
-    const fixed = [
-      { label: "0–5s", min: 0, max: 5000 },
-      { label: "5–10s", min: 5000, max: 10000 },
-      { label: "10–15s", min: 10000, max: 15000 },
-      { label: "15–20s", min: 15000, max: 20000 },
-      { label: "20–25s", min: 20000, max: 25000 },
-      { label: "25–30s", min: 25000, max: 30000 },
-      { label: "30–45s", min: 30000, max: 45000 },
-      { label: "45s+", min: 45000, max: Infinity },
-    ].map((b) => {
-      const items = valid.filter((t) => t >= b.min && t < b.max);
-      return { ...b, count: items.length, avg: items.length ? items.reduce((a, x) => a + x, 0) / items.length : null };
-    });
-    const f = fixed.findIndex((b) => b.count > 0);
-    const l = fixed.length - 1 - [...fixed].reverse().findIndex((b) => b.count > 0);
-    brackets = fixed.slice(Math.max(0, f), Math.min(fixed.length, l + 1));
-  } else {
-    const sortedV = [...valid].sort((a, b) => a - b);
-    const p02 = sortedV[Math.floor(sortedV.length * 0.02)];
-    const startMs = Math.floor(p02 / 2000) * 2000;
-    for (let i = 0; i < 8; i++) {
-      const lo = startMs + i * 2000, hi = i === 7 ? Infinity : lo + 2000;
-      const items = valid.filter((t) => (i === 0 ? t < hi : t >= lo && t < hi));
-      const label = i === 0 && lo > 0 ? `<${hi / 1000}s` : hi === Infinity ? `${lo / 1000}s+` : `${lo / 1000}–${hi / 1000}s`;
-      brackets.push({ label, count: items.length, avg: items.length ? items.reduce((a, x) => a + x, 0) / items.length : null });
-    }
-  }
-  const maxBracket = Math.max(...brackets.map((b) => b.count), 1);
-  const bracketsHtml = brackets.map((b) => `
-    <div class="bracket-row chart-tip-target" data-tip="${b.label}: ${b.count} solves (${Math.round((b.count / valid.length) * 100)}%)${b.avg ? ` • Avg ${formatTime(b.avg, dec)}` : ""}">
-      <span>${b.label}</span>
-      <div class="bracket-track"><div class="bracket-fill" style="width:${Math.round((b.count / maxBracket) * 100)}%"></div></div>
-      <span class="bracket-val">${b.count} (${Math.round((b.count / valid.length) * 100)}%)</span>
-    </div>
-  `).join("");
+  const trajW = 360, trajH = 142, tPadL = 36, tPadR = 10, tPadT = 12, tPadB = 20, pbPts = [], rollPts = [], rWin = valid.length >= 12 ? 12 : 3;
+  let rPB = Infinity;
+  for (let i = 0; i < valid.length; i++) { if (valid[i] < rPB) rPB = valid[i]; pbPts.push(rPB); const sl = valid.slice(Math.max(0, i - rWin + 1), i + 1); rollPts.push(sl.reduce((a, b) => a + b, 0) / sl.length); }
+  const n = valid.length, sX = (n * (n - 1)) / 2, sXX = (n * (n - 1) * (2 * n - 1)) / 6, sY = valid.reduce((a, b) => a + b, 0), sXY = valid.reduce((a, y, i) => a + i * y, 0);
+  const slp10 = ((n * sXX - sX * sX) ? (n * sXY - sX * sY) / (n * sXX - sX * sX) : 0) * 10;
+  const slopeText = slp10 <= -20 ? `↗ -${formatTime(Math.abs(slp10), 2)}s / 10` : slp10 >= 20 ? `↘ +${formatTime(slp10, 2)}s / 10` : "→ Steady";
+  const tMin = Math.min(...pbPts, ...rollPts), tMax = Math.max(...pbPts, ...rollPts), tSpan = Math.max(1, tMax - tMin), tMid = (tMin + tMax) / 2;
+  const tx = (i) => tPadL + (i / (n - 1)) * (trajW - tPadL - tPadR), ty = (v) => tPadT + (1 - (v - tMin) / tSpan) * (trajH - tPadT - tPadB);
+  const trajHits = []; for (let i = 0; i < n; i += Math.max(1, Math.floor(n / 24))) trajHits.push(`<circle class="chart-tip-target" cx="${tx(i).toFixed(1)}" cy="${ty(rollPts[i]).toFixed(1)}" r="7" fill="transparent" data-tip="Solve #${validEntries[i].idx} • Ao${rWin}: ${formatTime(rollPts[i], dec)} • PB: ${formatTime(pbPts[i], dec)}" style="cursor:crosshair"/>`);
 
-  // 2. Improvement Trajectory (Gridlines + Hover Scrubbing + PB Staircase)
-  const trajW = 360, trajH = 142, tPadL = 36, tPadR = 10, tPadT = 12, tPadB = 20;
-  let runningPB = Infinity;
-  const pbPoints = [], rollPoints = [], rollWin = valid.length >= 12 ? 12 : 3;
-  for (let i = 0; i < valid.length; i++) {
-    if (valid[i] < runningPB) runningPB = valid[i];
-    pbPoints.push(runningPB);
-    const slice = valid.slice(Math.max(0, i - rollWin + 1), i + 1);
-    rollPoints.push(slice.reduce((a, b) => a + b, 0) / slice.length);
-  }
-  const n = valid.length;
-  const sumX = (n * (n - 1)) / 2, sumXX = (n * (n - 1) * (2 * n - 1)) / 6;
-  const sumY = valid.reduce((a, b) => a + b, 0), sumXY = valid.reduce((a, y, i) => a + i * y, 0);
-  const slope = (n * sumXX - sumX * sumX) ? (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX) : 0;
-  const slopePer10 = slope * 10;
-  const slopeText = slopePer10 <= -20 ? `↗ -${formatTime(Math.abs(slopePer10), 2)}s / 10` : slopePer10 >= 20 ? `↘ +${formatTime(slopePer10, 2)}s / 10` : "→ Steady";
-
-  const tMin = Math.min(...pbPoints, ...rollPoints), tMax = Math.max(...pbPoints, ...rollPoints), tSpan = Math.max(1, tMax - tMin);
-  const tMid = (tMin + tMax) / 2;
-  const tx = (i) => tPadL + (i / (n - 1)) * (trajW - tPadL - tPadR);
-  const ty = (val) => tPadT + (1 - (val - tMin) / tSpan) * (trajH - tPadT - tPadB);
-  const pbPoly = pbPoints.map((v, i) => `${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ");
-  const rollPoly = rollPoints.map((v, i) => `${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ");
-
-  const stepTraj = Math.max(1, Math.floor(n / 24));
-  const trajHits = [];
-  for (let i = 0; i < n; i += stepTraj) {
-    trajHits.push(`<circle class="chart-tip-target" cx="${tx(i).toFixed(1)}" cy="${ty(rollPoints[i]).toFixed(1)}" r="7" fill="transparent" data-tip="Solve #${validEntries[i].idx} • Ao${rollWin}: ${formatTime(rollPoints[i], dec)} • PB: ${formatTime(pbPoints[i], dec)}" style="cursor:crosshair"/>`);
-  }
-
-  // 3. Hourly Performance (Real Active Hours: Bar = Solve Count, Accent = Fastest Hour)
-  const hourBuckets = Array.from({ length: 24 }, (_, hr) => ({ hr, sum: 0, count: 0, best: Infinity }));
-  validEntries.forEach((e) => {
-    const hr = new Date(e.createdAt).getHours();
-    hourBuckets[hr].sum += e.ms; hourBuckets[hr].count++;
-    if (e.ms < hourBuckets[hr].best) hourBuckets[hr].best = e.ms;
-  });
-  const activeHours = hourBuckets.filter((h) => h.count > 0);
-  const maxHourCount = Math.max(...activeHours.map((h) => h.count), 1);
-  const fastestHour = [...activeHours].sort((a, b) => (a.sum / a.count) - (b.sum / b.count))[0];
+  const hB = Array.from({ length: 24 }, (_, hr) => ({ hr, sum: 0, count: 0, best: Infinity }));
+  validEntries.forEach((e) => { const hr = new Date(e.createdAt).getHours(); hB[hr].sum += e.ms; hB[hr].count++; if (e.ms < hB[hr].best) hB[hr].best = e.ms; });
+  const actH = hB.filter((h) => h.count > 0), maxHC = Math.max(...actH.map((h) => h.count), 1), fastH = [...actH].sort((a, b) => (a.sum / a.count) - (b.sum / b.count))[0];
   const fmtHr = (hr) => hr === 0 ? "12a" : hr < 12 ? `${hr}a` : hr === 12 ? "12p" : `${hr - 12}p`;
+  const hourlyHtml = actH.map((h) => `<div class="tod-col ${fastH && h.hr === fastH.hr ? "best" : ""} chart-tip-target" data-tip="${fmtHr(h.hr)}: ${h.count} solves • ${formatTime(h.sum / h.count, dec)} avg • Best ${formatTime(h.best, dec)}"><span class="tod-time">${h.count}</span><div class="tod-bar-wrap"><div class="tod-bar" style="height:${Math.max(14, Math.round((h.count / maxHC) * 100))}%"></div></div><span class="tod-lbl">${fmtHr(h.hr)}</span></div>`).join("");
 
-  const hourlyHtml = activeHours.map((h) => {
-    const avg = h.sum / h.count;
-    const hPct = Math.max(14, Math.round((h.count / maxHourCount) * 100));
-    const isFastest = fastestHour && h.hr === fastestHour.hr;
-    return `
-      <div class="tod-col ${isFastest ? "best" : ""} chart-tip-target" data-tip="${fmtHr(h.hr)}: ${h.count} solves • ${formatTime(avg, dec)} avg • Best ${formatTime(h.best, dec)}">
-        <span class="tod-time">${h.count}</span>
-        <div class="tod-bar-wrap"><div class="tod-bar" style="height:${hPct}%"></div></div>
-        <span class="tod-lbl">${fmtHr(h.hr)}</span>
-      </div>
-    `;
-  }).join("");
-
-  // 4. Daily Activity & Pace Matrix (Real Dates + Counts + Avg inside each tile)
   const dayMap = new Map();
-  validEntries.forEach((e) => {
-    const d = new Date(e.createdAt);
-    const key = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-    const label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    if (!dayMap.has(key)) dayMap.set(key, { label, times: [] });
-    dayMap.get(key).times.push(e.ms);
-  });
+  validEntries.forEach((e) => { const d = new Date(e.createdAt), k = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`, lbl = d.toLocaleDateString(undefined, { month: "short", day: "numeric" }); if (!dayMap.has(k)) dayMap.set(k, { label: lbl, times: [] }); dayMap.get(k).times.push(e.ms); });
+  const days = [...dayMap.values()].slice(-12), dAvgs = days.map((d) => d.times.reduce((a, b) => a + b, 0) / d.times.length), minDA = Math.min(...dAvgs), maxDA = Math.max(...dAvgs);
+  const paceTilesHtml = days.map((d, idx) => { const avg = dAvgs[idx], norm = maxDA > minDA ? 1 - (avg - minDA) / (maxDA - minDA) : 0.7; return `<div class="pace-tile chart-tip-target" data-tip="${d.label}: ${d.times.length} solves • ${formatTime(avg, dec)} avg • Best ${formatTime(Math.min(...d.times), dec)}"><span class="pace-top">${d.label}</span><strong class="pace-main">${formatTime(avg, 2)}</strong><span class="pace-sub">${d.times.length}x</span><div class="pace-bar" style="width:${Math.round(25 + norm * 75)}%; opacity:${(0.35 + norm * 0.65).toFixed(2)}"></div></div>`; }).join("");
 
-  let paceTiles = [], paceSubtitle = "";
-  if (dayMap.size >= 2) {
-    paceSubtitle = "Daily avg & solves (full bar = faster)";
-    const days = [...dayMap.values()].slice(-12);
-    const dayAvgs = days.map((d) => d.times.reduce((a, b) => a + b, 0) / d.times.length);
-    const minDA = Math.min(...dayAvgs), maxDA = Math.max(...dayAvgs);
-    paceTiles = days.map((d, idx) => {
-      const avg = dayAvgs[idx];
-      const norm = maxDA > minDA ? 1 - (avg - minDA) / (maxDA - minDA) : 0.7;
-      return {
-        top: d.label, main: formatTime(avg, 2), sub: `${d.times.length}x`,
-        pct: Math.round(25 + norm * 75), alpha: (0.35 + norm * 0.65).toFixed(2),
-        tip: `${d.label}: ${d.times.length} solves • ${formatTime(avg, dec)} avg • Best ${formatTime(Math.min(...d.times), dec)}`,
-      };
-    });
-  } else {
-    paceSubtitle = "Session blocks (full bar = faster)";
-    const bSize = valid.length >= 30 ? 10 : Math.max(2, Math.floor(valid.length / 4));
-    const blocks = [];
-    for (let i = 0; i < valid.length; i += bSize) {
-      const sl = valid.slice(i, i + bSize);
-      blocks.push({ label: `#${i + 1}-${i + sl.length}`, times: sl, avg: sl.reduce((a, b) => a + b, 0) / sl.length });
-    }
-    const minBA = Math.min(...blocks.map((b) => b.avg)), maxBA = Math.max(...blocks.map((b) => b.avg));
-    paceTiles = blocks.slice(-12).map((b) => {
-      const norm = maxBA > minBA ? 1 - (b.avg - minBA) / (maxBA - minBA) : 0.7;
-      return {
-        top: b.label, main: formatTime(b.avg, 2), sub: `${b.times.length}x`,
-        pct: Math.round(25 + norm * 75), alpha: (0.35 + norm * 0.65).toFixed(2),
-        tip: `Solves ${b.label}: ${formatTime(b.avg, dec)} avg • Best ${formatTime(Math.min(...b.times), dec)}`,
-      };
-    });
-  }
-
-  const paceTilesHtml = paceTiles.map((t) => `
-    <div class="pace-tile chart-tip-target" data-tip="${t.tip}">
-      <span class="pace-top">${t.top}</span>
-      <strong class="pace-main">${t.main}</strong>
-      <span class="pace-sub">${t.sub}</span>
-      <div class="pace-bar" style="width:${t.pct}%; opacity:${t.alpha}"></div>
-    </div>
-  `).join("");
-
-  // 5. Speed vs Consistency Scatter Plot (Real Axes, Crosshair & Hover Tooltips)
-  const chunkSize = valid.length >= 40 ? 10 : valid.length >= 15 ? 5 : 2;
-  const chunks = [];
-  for (let i = 0; i + chunkSize <= valid.length; i += chunkSize) {
-    const sl = valid.slice(i, i + chunkSize);
-    const cMean = sl.reduce((a, b) => a + b, 0) / sl.length;
-    const cSd = Math.sqrt(sl.reduce((a, t) => a + (t - cMean) ** 2, 0) / sl.length);
-    chunks.push({ label: `#${i + 1}–${i + chunkSize}`, mean: cMean, sd: cSd });
-  }
-
-  let scatterSvg = `<p class="muted-text">Need ${chunkSize * 2}+ solves for scatter plot</p>`;
+  const cSize = valid.length >= 40 ? 10 : valid.length >= 15 ? 5 : 2, chunks = [];
+  for (let i = 0; i + cSize <= valid.length; i += cSize) { const sl = valid.slice(i, i + cSize), cm = sl.reduce((a, b) => a + b, 0) / sl.length, cs = Math.sqrt(sl.reduce((a, t) => a + (t - cm) ** 2, 0) / sl.length); chunks.push({ label: `#${i + 1}–${i + cSize}`, mean: cm, sd: cs }); }
+  let scatterSvg = `<p class="muted-text">Need ${cSize * 2}+ solves for scatter plot</p>`;
   if (chunks.length >= 2) {
-    const sw = 260, sh = 142, sL = 32, sR = 10, sT = 12, sB = 22;
-    const minM = Math.min(...chunks.map((c) => c.mean)), maxM = Math.max(...chunks.map((c) => c.mean));
-    const minS = Math.min(...chunks.map((c) => c.sd)), maxS = Math.max(...chunks.map((c) => c.sd));
-    const spanM = Math.max(1, maxM - minM), spanS = Math.max(1, maxS - minS);
-    const sx = (m) => sL + ((m - minM) / spanM) * (sw - sL - sR);
-    const sy = (s) => sh - sB - ((s - minS) / spanS) * (sh - sT - sB);
-
-    const avgChunkM = chunks.reduce((a, c) => a + c.mean, 0) / chunks.length;
-    const avgChunkS = chunks.reduce((a, c) => a + c.sd, 0) / chunks.length;
-
-    const dots = chunks.map((c, idx) => {
-      const cx = sx(c.mean).toFixed(1), cy = sy(c.sd).toFixed(1);
-      const isLast = idx === chunks.length - 1;
-      const op = (0.3 + (idx / (chunks.length - 1)) * 0.7).toFixed(2);
-      return `<circle class="chart-tip-target" cx="${cx}" cy="${cy}" r="${isLast ? 4.8 : 3.2}" fill="var(--accent-color)" opacity="${op}" stroke="${isLast ? "#fff" : "none"}" stroke-width="1.2" data-tip="${c.label}: ${formatTime(c.mean, dec)} avg • σ ${formatTime(c.sd, dec)}s" style="cursor:pointer"/>`;
-    }).join("");
-
-    scatterSvg = `
-      <svg viewBox="0 0 ${sw} ${sh}" width="100%" height="134">
-        <line x1="${sL}" y1="${sy(avgChunkS).toFixed(1)}" x2="${sw - sR}" y2="${sy(avgChunkS).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/>
-        <line x1="${sx(avgChunkM).toFixed(1)}" y1="${sT}" x2="${sx(avgChunkM).toFixed(1)}" y2="${sh - sB}" stroke="var(--border-color)" stroke-dasharray="3 3"/>
-        <line x1="${sL}" y1="${sh - sB}" x2="${sw - sR}" y2="${sh - sB}" stroke="var(--border-strong)"/>
-        <line x1="${sL}" y1="${sT}" x2="${sL}" y2="${sh - sB}" stroke="var(--border-strong)"/>
-        <text x="4" y="${sT + 6}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(maxS, 1)}σ</text>
-        <text x="4" y="${sh - sB}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(minS, 1)}σ</text>
-        <text x="${sL}" y="${sh - 6}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(minM, 1)}s</text>
-        <text x="${sw - sR - 26}" y="${sh - 6}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(maxM, 1)}s</text>
-        <text x="${sL + 4}" y="${sT + 8}" fill="var(--accent-color)" opacity="0.65" font-size="7" font-family="monospace">← Fast &amp; Steady (bottom-left)</text>
-        ${dots}
-      </svg>
-    `;
+    const sw = 260, sh = 142, sL = 32, sR = 10, sT = 12, sB = 22, minM = Math.min(...chunks.map((c) => c.mean)), maxM = Math.max(...chunks.map((c) => c.mean)), minS = Math.min(...chunks.map((c) => c.sd)), maxS = Math.max(...chunks.map((c) => c.sd)), spM = Math.max(1, maxM - minM), spS = Math.max(1, maxS - minS);
+    const sx = (m) => sL + ((m - minM) / spM) * (sw - sL - sR), sy = (s) => sh - sB - ((s - minS) / spS) * (sh - sT - sB), avgCM = chunks.reduce((a, c) => a + c.mean, 0) / chunks.length, avgCS = chunks.reduce((a, c) => a + c.sd, 0) / chunks.length;
+    const dots = chunks.map((c, idx) => `<circle class="chart-tip-target" cx="${sx(c.mean).toFixed(1)}" cy="${sy(c.sd).toFixed(1)}" r="${idx === chunks.length - 1 ? 4.8 : 3.2}" fill="var(--accent-color)" opacity="${(0.3 + (idx / (chunks.length - 1)) * 0.7).toFixed(2)}" stroke="${idx === chunks.length - 1 ? "#fff" : "none"}" stroke-width="1.2" data-tip="${c.label}: ${formatTime(c.mean, dec)} avg • σ ${formatTime(c.sd, dec)}s" style="cursor:pointer"/>`).join("");
+    scatterSvg = `<svg viewBox="0 0 ${sw} ${sh}" width="100%" height="134"><line x1="${sL}" y1="${sy(avgCS).toFixed(1)}" x2="${sw - sR}" y2="${sy(avgCS).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/><line x1="${sx(avgCM).toFixed(1)}" y1="${sT}" x2="${sx(avgCM).toFixed(1)}" y2="${sh - sB}" stroke="var(--border-color)" stroke-dasharray="3 3"/><line x1="${sL}" y1="${sh - sB}" x2="${sw - sR}" y2="${sh - sB}" stroke="var(--border-strong)"/><line x1="${sL}" y1="${sT}" x2="${sL}" y2="${sh - sB}" stroke="var(--border-strong)"/><text x="4" y="${sT + 6}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(maxS, 1)}σ</text><text x="4" y="${sh - sB}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(minS, 1)}σ</text><text x="${sL}" y="${sh - 6}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(minM, 1)}s</text><text x="${sw - sR - 26}" y="${sh - 6}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(maxM, 1)}s</text><text x="${sL + 4}" y="${sT + 8}" fill="var(--accent-color)" opacity="0.65" font-size="7" font-family="monospace">← Fast &amp; Steady</text>${dots}</svg>`;
   }
 
-  // 6. Compact Records & Averages Matrix at the Bottom
-  const sorted = [...valid].sort((a, b) => a - b);
-  const median = sorted[Math.floor(sorted.length / 2)];
-  const iqr = sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.75)] - sorted[Math.floor(sorted.length * 0.25)] : null;
-  const subCount = valid.filter((t) => t <= settings.goalMs).length;
-  let curStreak = 0, bestStreak = 0;
-  eventSolves.forEach((s) => { if (getEffectiveMs(s) <= settings.goalMs) { curStreak++; if (curStreak > bestStreak) bestStreak = curStreak; } else curStreak = 0; });
-
-  const fmt = (v) => (v === null ? "-" : formatTime(v, dec));
-  const mo3 = eventSolves.length >= 3 ? calculateMeanOfSlice(eventSolves.slice(-3)) : null;
+  const sorted = [...valid].sort((a, b) => a - b), median = sorted[Math.floor(sorted.length / 2)], iqr = sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.75)] - sorted[Math.floor(sorted.length * 0.25)] : null, subCount = valid.filter((t) => t <= settings.goalMs).length;
+  let curSt = 0, bestSt = 0; eventSolves.forEach((s) => { if (getEffectiveMs(s) <= settings.goalMs) { curSt++; if (curSt > bestSt) bestSt = curSt; } else curSt = 0; });
+  const fmt = (v) => (v === null ? "-" : formatTime(v, dec)), mo3 = eventSolves.length >= 3 ? calculateMeanOfSlice(eventSolves.slice(-3)) : null;
   const rows = [
-    ["Single", formatSolve(eventSolves.slice(-1)[0], dec), fmt(best), `Worst: ${fmt(worst)}`],
+    ["Single", formatSolve(eventSolves.slice(-1)[0], dec), fmt(best), `Worst: ${fmt(worst)} • Spread: ${formatTime(worst - best, dec)}`],
     ["Mo3", fmt(mo3), fmt(getBestRollingAvg(eventSolves, 3, true)), `Median: ${fmt(median)}`],
-    ["Ao5", fmt(calculateTrimmedAverage(eventSolves, 5)), fmt(getBestRollingAvg(eventSolves, 5)), `Sub-Goal: ${Math.round((subCount / valid.length) * 100)}%`],
-    ["Ao12", fmt(calculateTrimmedAverage(eventSolves, 12)), fmt(getBestRollingAvg(eventSolves, 12)), `Goal Streak: ${bestStreak} (cur ${curStreak})`],
-    ["Ao25 / Ao50", `${fmt(calculateTrimmedAverage(eventSolves, 25))} / ${fmt(calculateTrimmedAverage(eventSolves, 50))}`, `${fmt(getBestRollingAvg(eventSolves, 25))} / ${fmt(getBestRollingAvg(eventSolves, 50))}`, `Std Dev: ${stdDev !== null ? formatTime(stdDev, dec) + "s" : "-"}`],
-    ["Ao100", fmt(calculateTrimmedAverage(eventSolves, 100)), fmt(getBestRollingAvg(eventSolves, 100)), `Consistency: ${consistency ? consistency.toFixed(1) + "%" : "-"} · IQR: ${iqr ? formatTime(iqr, dec) + "s" : "-"}`],
+    ["Ao5", fmt(calculateTrimmedAverage(eventSolves, 5)), fmt(getBestRollingAvg(eventSolves, 5)), `Sub-Goal: ${Math.round((subCount / valid.length) * 100)}% (${subCount}/${valid.length})`],
+    ["Ao12", fmt(calculateTrimmedAverage(eventSolves, 12)), fmt(getBestRollingAvg(eventSolves, 12)), `Goal Streak: ${bestSt} (cur ${curSt})`],
+    ["Ao25 / Ao50", `${fmt(calculateTrimmedAverage(eventSolves, 25))} / ${fmt(calculateTrimmedAverage(eventSolves, 50))}`, `${fmt(getBestRollingAvg(eventSolves, 25))} / ${fmt(getBestRollingAvg(eventSolves, 50))}`, `Std Dev: ${formatTime(stdDev, dec)}s`],
+    ["Ao100", fmt(calculateTrimmedAverage(eventSolves, 100)), fmt(getBestRollingAvg(eventSolves, 100)), `Consistency: ${consistency.toFixed(1)}% • IQR: ${iqr ? formatTime(iqr, dec) + "s" : "-"}`],
   ];
 
   advStatsBody.innerHTML = `
-    <div id="adv-chart-tooltip" class="adv-chart-tooltip hidden"></div>
-
     <div class="charts-grid-2">
-      <div class="chart-card">
-        <div class="chart-title-row">
-          <span>Time Brackets</span>
-          <div style="display:flex; gap:0.25rem;">
-            <button class="btn-mini-pill ${advBracketStep === 5000 ? "active" : ""}" data-bstep="5000" type="button">5s</button>
-            <button class="btn-mini-pill ${advBracketStep === 2000 ? "active" : ""}" data-bstep="2000" type="button">2s</button>
-          </div>
-        </div>
-        <div class="bracket-list">${bracketsHtml}</div>
-      </div>
-
-      <div class="chart-card">
-        <div class="chart-title-row"><span>Improvement Trajectory</span><small>${slopeText}</small></div>
-        <svg viewBox="0 0 ${trajW} ${trajH}" width="100%" height="134" style="color:var(--accent-color)">
-          <line x1="${tPadL}" y1="${ty(tMax).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMax).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/>
-          <line x1="${tPadL}" y1="${ty(tMid).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMid).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/>
-          <line x1="${tPadL}" y1="${ty(tMin).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMin).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/>
-          <polyline fill="none" stroke="currentColor" stroke-opacity="0.35" stroke-dasharray="4 3" stroke-width="1.4" points="${pbPoly}" />
-          <polyline fill="none" stroke="currentColor" stroke-width="2" points="${rollPoly}" />
-          <text x="2" y="${ty(tMax) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMax, 1)}</text>
-          <text x="2" y="${ty(tMid) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMid, 1)}</text>
-          <text x="2" y="${ty(tMin) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMin, 1)}</text>
-          <text x="${tPadL}" y="${trajH - 4}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">#${validEntries[0].idx}</text>
-          <text x="${trajW - tPadR - 24}" y="${trajH - 4}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">#${validEntries[n - 1].idx}</text>
-          ${trajHits.join("")}
-        </svg>
-        <small class="muted-text" style="font-size:0.7rem;">Solid = Rolling Ao${rollWin} • Dashed = Single PB Staircase (hover to inspect)</small>
-      </div>
+      <div class="chart-card"><div class="chart-title-row"><span>Time Brackets</span><small>${valid.length} valid</small></div><div class="bracket-list">${bracketsHtml}</div></div>
+      <div class="chart-card"><div class="chart-title-row"><span>Improvement Trajectory</span><small>${slopeText}</small></div><svg viewBox="0 0 ${trajW} ${trajH}" width="100%" height="134" style="color:var(--accent-color)"><line x1="${tPadL}" y1="${ty(tMax).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMax).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/><line x1="${tPadL}" y1="${ty(tMid).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMid).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/><line x1="${tPadL}" y1="${ty(tMin).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMin).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/><polyline fill="none" stroke="currentColor" stroke-opacity="0.35" stroke-dasharray="4 3" stroke-width="1.4" points="${pbPts.map((v, i) => `${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ")}" /><polyline fill="none" stroke="currentColor" stroke-width="2" points="${rollPts.map((v, i) => `${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ")}" /><text x="2" y="${ty(tMax) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMax, 1)}</text><text x="2" y="${ty(tMid) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMid, 1)}</text><text x="2" y="${ty(tMin) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMin, 1)}</text><text x="${tPadL}" y="${trajH - 4}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">#${validEntries[0].idx}</text><text x="${trajW - tPadR - 24}" y="${trajH - 4}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">#${validEntries[n - 1].idx}</text>${trajHits.join("")}</svg><small class="muted-text" style="font-size:0.7rem;">Solid = Rolling Ao${rWin} • Dashed = Single PB Staircase</small></div>
     </div>
-
     <div class="charts-grid-3">
-      <div class="chart-card">
-        <div class="chart-title-row"><span>Hourly Volume &amp; Speed</span><small>Fastest: ${fastestHour ? `${fmtHr(fastestHour.hr)} (${formatTime(fastestHour.sum / fastestHour.count, 2)})` : "-"}</small></div>
-        <div class="tod-grid" style="grid-template-columns: repeat(${activeHours.length}, minmax(24px, 1fr))">${hourlyHtml}</div>
-      </div>
-
-      <div class="chart-card">
-        <div class="chart-title-row"><span>Daily Pace Matrix</span><small>${paceSubtitle}</small></div>
-        <div class="pace-grid">${paceTilesHtml}</div>
-      </div>
-
-      <div class="chart-card">
-        <div class="chart-title-row"><span>Speed vs Consistency</span><small>${chunkSize}-solve blocks</small></div>
-        ${scatterSvg}
-      </div>
+      <div class="chart-card"><div class="chart-title-row"><span>Hourly Volume &amp; Speed</span><small>Fastest: ${fastH ? `${fmtHr(fastH.hr)} (${formatTime(fastH.sum / fastH.count, 2)})` : "-"}</small></div><div class="tod-grid" style="grid-template-columns: repeat(${actH.length}, minmax(24px, 1fr))">${hourlyHtml}</div></div>
+      <div class="chart-card"><div class="chart-title-row"><span>Daily Pace Matrix</span><small>Last 12 active days</small></div><div class="pace-grid">${paceTilesHtml}</div></div>
+      <div class="chart-card"><div class="chart-title-row"><span>Speed vs Consistency</span><small>${cSize}-solve blocks</small></div>${scatterSvg}</div>
     </div>
-
-    <div class="records-table-wrap">
-      <table class="records-table">
-        <thead><tr><th>Metric</th><th>Current</th><th>Best Ever</th><th>Details</th></tr></thead>
-        <tbody>${rows.map(([m, c, b, note]) => `<tr><td>${m}</td><td class="num">${c}</td><td class="num">${b}</td><td style="color:var(--text-secondary)">${note}</td></tr>`).join("")}</tbody>
-      </table>
-    </div>
+    <div class="records-table-wrap"><table class="records-table"><thead><tr><th>Metric</th><th>Current</th><th>Best Ever</th><th>Details</th></tr></thead><tbody>${rows.map(([m, c, b, note]) => `<tr><td>${m}</td><td class="num">${c}</td><td class="num">${b}</td><td style="color:var(--text-secondary)">${note}</td></tr>`).join("")}</tbody></table></div>
   `;
 
-  advStatsBody.querySelectorAll("[data-bstep]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      advBracketStep = Number(btn.dataset.bstep);
-      renderAdvancedStats(eventSolves);
-    });
-  });
-
-  const tipEl = $("adv-chart-tooltip");
   advStatsBody.querySelectorAll(".chart-tip-target").forEach((el) => {
-    el.addEventListener("pointerenter", (e) => {
-      tipEl.textContent = el.dataset.tip;
-      tipEl.classList.remove("hidden");
-      const rect = advStatsDrawer.getBoundingClientRect();
-      tipEl.style.left = `${Math.min(rect.width - 140, Math.max(120, e.clientX - rect.left))}px`;
-      tipEl.style.top = `${Math.max(48, e.clientY - rect.top - 14)}px`;
-    });
-    el.addEventListener("pointerleave", () => tipEl.classList.add("hidden"));
+    el.addEventListener("pointerenter", (e) => showTooltip(el.dataset.tip, e.clientX, e.clientY));
+    el.addEventListener("pointermove", (e) => showTooltip(el.dataset.tip, e.clientX, e.clientY));
+    el.addEventListener("pointerleave", hideTooltip);
   });
 }
 
@@ -1590,700 +739,155 @@ function renderGoal(ao5) {
 
 function renderAll() {
   const eventSolves = getCurrentEventSolves(), dec = settings.decimals;
-  const best = calculateBest(eventSolves), ao5 = calculateTrimmedAverage(eventSolves, 5);
-  const ao12 = calculateTrimmedAverage(eventSolves, 12), mean = calculateSessionMean(eventSolves);
-
-  statBestEl.textContent = best === null ? "-" : formatTime(best, dec);
-  statAo5El.textContent = ao5 === null ? "-" : formatTime(ao5, dec);
-  statAo12El.textContent = ao12 === null ? "-" : formatTime(ao12, dec);
-  statMeanEl.textContent = mean === null ? "-" : formatTime(mean, dec);
+  const best = calculateBest(eventSolves), ao5 = calculateTrimmedAverage(eventSolves, 5), ao12 = calculateTrimmedAverage(eventSolves, 12), mean = calculateSessionMean(eventSolves);
+  statBestEl.textContent = best === null ? "-" : formatTime(best, dec); statAo5El.textContent = ao5 === null ? "-" : formatTime(ao5, dec);
+  statAo12El.textContent = ao12 === null ? "-" : formatTime(ao12, dec); statMeanEl.textContent = mean === null ? "-" : formatTime(mean, dec);
   statCountEl.textContent = String(eventSolves.length);
-
   topbarEventPill.textContent = EVENT_TO_PUZZLE[settings.event] || settings.event.toUpperCase();
   topbarAo5Pill.textContent = ao5 === null ? "Ao5: -" : `Ao5: ${formatTime(ao5, dec)}`;
 
-  renderSparkline(eventSolves);
-  renderGoal(ao5);
-  renderAdvancedStats(eventSolves);
+  renderSparkline(eventSolves); renderGoal(ao5);
+  const vMs = eventSolves.map(getEffectiveMs).filter((t) => t !== Infinity);
+  advStatsTeaser.textContent = (vMs.length >= 2 && mean !== null && mean !== Infinity) ? `• σ ${formatTime(Math.sqrt(vMs.reduce((a, t) => a + (t - mean) ** 2, 0) / vMs.length), dec)}s` : "";
+  if (advStatsOpen) renderAdvancedStats(eventSolves);
 
   const latest = eventSolves[eventSolves.length - 1];
-  if (latest && timerState !== "running" && timerState !== "holding" && timerState !== "ready" && timerState !== "inspecting") {
-    lastSolveActions.classList.remove("hidden");
-    lastPlus2Btn.classList.toggle("active", latest.penalty === "+2");
-    lastDnfBtn.classList.toggle("active", latest.penalty === "DNF");
+  if (latest && !["running", "holding", "ready", "inspecting"].includes(timerState)) {
+    lastSolveActions.classList.remove("hidden"); lastPlus2Btn.classList.toggle("active", latest.penalty === "+2"); lastDnfBtn.classList.toggle("active", latest.penalty === "DNF");
     if (timerState === "idle") timerDisplay.textContent = formatSolve(latest, dec);
   } else {
-    lastSolveActions.classList.add("hidden");
-    if (timerState === "idle") timerDisplay.textContent = formatTime(0, dec);
+    lastSolveActions.classList.add("hidden"); if (timerState === "idle") timerDisplay.textContent = formatTime(0, dec);
   }
 
-  solveListEl.innerHTML = "";
-  for (let i = eventSolves.length - 1; i >= 0; i--) {
-    const solve = eventSolves[i], li = document.createElement("li");
-    li.className = "solve-item";
-    li.innerHTML = `
-      <span class="solve-index">${i + 1}.</span>
-      <span class="solve-time">${formatSolve(solve, dec)}</span>
-      <div class="solve-item-actions">
-        <button class="mini-btn ${solve.penalty === "+2" ? "active" : ""}" data-act="+2" type="button">+2</button>
-        <button class="mini-btn ${solve.penalty === "DNF" ? "active" : ""}" data-act="DNF" type="button">DNF</button>
-        <button class="mini-btn" data-act="del" type="button">×</button>
-      </div>
-    `;
-    li.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-act]");
-      if (btn) {
-        e.stopPropagation();
-        if (btn.dataset.act === "+2") togglePenalty(solve.id, "+2");
-        if (btn.dataset.act === "DNF") togglePenalty(solve.id, "DNF");
-        if (btn.dataset.act === "del") deleteSolve(solve.id);
-        return;
-      }
-      openSolveModal(solve.id);
-    });
-    solveListEl.appendChild(li);
+  const startIdx = showAllSolvesInList ? 0 : Math.max(0, eventSolves.length - 100), htmlRows = [];
+  for (let i = eventSolves.length - 1; i >= startIdx; i--) {
+    const s = eventSolves[i];
+    htmlRows.push(`<li class="solve-item" data-id="${s.id}"><span class="solve-index">${i + 1}.</span><span class="solve-time">${formatSolve(s, dec)}</span><div class="solve-item-actions"><button class="mini-btn ${s.penalty === "+2" ? "active" : ""}" data-act="+2" type="button">+2</button><button class="mini-btn ${s.penalty === "DNF" ? "active" : ""}" data-act="DNF" type="button">DNF</button><button class="mini-btn" data-act="del" type="button">×</button></div></li>`);
   }
+  if (startIdx > 0) htmlRows.push(`<button id="show-all-btn" class="btn-text full-width" style="padding:0.5rem 0;" type="button">Load all ${eventSolves.length} solves</button>`);
+  solveListEl.innerHTML = htmlRows.join("");
+  if (activeTab === "improvement") renderImprovementView();
 }
 
-advStatsToggle.addEventListener("click", () => {
-  advStatsToggle.blur();
-  advStatsOpen = !advStatsOpen;
-  advStatsDrawer.classList.toggle("hidden", !advStatsOpen);
+solveListEl.addEventListener("click", (e) => {
+  if (e.target.id === "show-all-btn") { showAllSolvesInList = true; renderAll(); return; }
+  const li = e.target.closest("li[data-id]"); if (!li) return;
+  const id = li.dataset.id, btn = e.target.closest("button[data-act]");
+  if (btn) { e.stopPropagation(); if (btn.dataset.act === "+2") togglePenalty(id, "+2"); if (btn.dataset.act === "DNF") togglePenalty(id, "DNF"); if (btn.dataset.act === "del") deleteSolve(id); return; }
+  openSolveModal(id);
 });
-closeAdvStatsBtn.addEventListener("click", () => {
-  advStatsOpen = false;
-  advStatsDrawer.classList.add("hidden");
-});
+advStatsToggle.addEventListener("click", () => { advStatsToggle.blur(); advStatsOpen = !advStatsOpen; if (advStatsOpen) renderAdvancedStats(getCurrentEventSolves()); advStatsDrawer.classList.toggle("hidden", !advStatsOpen); });
+closeAdvStatsBtn.addEventListener("click", () => { advStatsOpen = false; advStatsDrawer.classList.add("hidden"); });
 
-// === SECTION A9: METHOD-SYNCED GUIDES, CUBE ENGINE & ALG LEARNER ===
-const CUBE_FACES = ["U", "R", "F", "D", "L", "B"];
-const CUBE_OFF = { U: 0, R: 9, F: 18, D: 27, L: 36, B: 45 };
-const STICKER_HEX = { U: "#facc15", R: "#ef4444", F: "#22c55e", D: "#f8fafc", L: "#f97316", B: "#3b82f6" };
+// === SECTION A7: NAVIGATION, IMPORT/EXPORT, SETTINGS & PROFILE ===
+navTabs.forEach((btn) => btn.addEventListener("click", () => { if (timerState !== "running") { switchTab(btn.dataset.tab); btn.blur(); } }));
+function togglePenalty(id, type) { const s = solves.find((x) => x.id === id); if (!s) return; s.penalty = s.penalty === type ? null : type; saveSolves(); renderAll(); if (selectedSolveId === id) openSolveModal(id); }
+function deleteSolve(id) { solves = solves.filter((x) => x.id !== id); saveSolves(); if (selectedSolveId === id) closeModals(); renderAll(); }
 
-let algSearchQuery = "";
-let algStepIndex = 0;
-let algIsPlaying = false;
-let algPlayTimer = null;
-let algViewMode = "webgl"; // "webgl" | "step"
-let activeAlgTwisty = null;
-let currentAlgItem = null;
-
-function createSolvedCube() {
-  return CUBE_FACES.flatMap((f) => Array(9).fill(f));
-}
-function rotFaceCW(c, f) {
-  const o = CUBE_OFF[f], s = c.slice(o, o + 9);
-  const cw = [s[6], s[3], s[0], s[7], s[4], s[1], s[8], s[5], s[2]];
-  for (let i = 0; i < 9; i++) c[o + i] = cw[i];
-}
-function cycle4(c, a, b, d, e) {
-  for (let i = 0; i < 3; i++) {
-    const tmp = c[e[i]];
-    c[e[i]] = c[d[i]]; c[d[i]] = c[b[i]]; c[b[i]] = c[a[i]]; c[a[i]] = tmp;
-  }
-}
-function moveCubeCW(c, m) {
-  const O = CUBE_OFF;
-  if (m === "U") { rotFaceCW(c, "U"); cycle4(c, [O.F, O.F+1, O.F+2], [O.L, O.L+1, O.L+2], [O.B, O.B+1, O.B+2], [O.R, O.R+1, O.R+2]); }
-  else if (m === "D") { rotFaceCW(c, "D"); cycle4(c, [O.F+6, O.F+7, O.F+8], [O.R+6, O.R+7, O.R+8], [O.B+6, O.B+7, O.B+8], [O.L+6, O.L+7, O.L+8]); }
-  else if (m === "R") { rotFaceCW(c, "R"); cycle4(c, [O.F+2, O.F+5, O.F+8], [O.U+2, O.U+5, O.U+8], [O.B+6, O.B+3, O.B], [O.D+2, O.D+5, O.D+8]); }
-  else if (m === "L") { rotFaceCW(c, "L"); cycle4(c, [O.U, O.U+3, O.U+6], [O.F, O.F+3, O.F+6], [O.D, O.D+3, O.D+6], [O.B+8, O.B+5, O.B+2]); }
-  else if (m === "F") { rotFaceCW(c, "F"); cycle4(c, [O.U+6, O.U+7, O.U+8], [O.R, O.R+3, O.R+6], [O.D+2, O.D+1, O.D], [O.L+8, O.L+5, O.L+2]); }
-  else if (m === "B") { rotFaceCW(c, "B"); cycle4(c, [O.U+2, O.U+1, O.U], [O.L, O.L+3, O.L+6], [O.D+6, O.D+7, O.D+8], [O.R+8, O.R+5, O.R+2]); }
-  else if (m === "M") { cycle4(c, [O.U+1, O.U+4, O.U+7], [O.F+1, O.F+4, O.F+7], [O.D+1, O.D+4, O.D+7], [O.B+7, O.B+4, O.B+1]); }
-  else if (m === "E") { cycle4(c, [O.F+3, O.F+4, O.F+5], [O.R+3, O.R+4, O.R+5], [O.B+3, O.B+4, O.B+5], [O.L+3, O.L+4, O.L+5]); }
-  else if (m === "S") { cycle4(c, [O.U+3, O.U+4, O.U+5], [O.R+1, O.R+4, O.R+7], [O.D+5, O.D+4, O.D+3], [O.L+7, O.L+4, O.L+1]); }
-}
-function applyCubeToken(c, tok) {
-  if (!tok) return;
-  let base = tok[0], mod = tok.slice(1);
-  if (mod.startsWith("w")) { base = base.toLowerCase(); mod = mod.slice(1); }
-  const turns = mod.includes("2") ? 2 : mod.includes("'") ? 3 : 1;
-  const wide = { r: ["R", "M", 3], l: ["L", "M", 1], u: ["U", "E", 3], d: ["D", "E", 1], f: ["F", "S", 1], b: ["B", "S", 3] };
-  for (let t = 0; t < turns; t++) {
-    if ("UDRLFBMES".includes(base)) moveCubeCW(c, base);
-    else if (wide[base]) {
-      const [f, sl, st] = wide[base];
-      moveCubeCW(c, f);
-      for (let k = 0; k < st; k++) moveCubeCW(c, sl);
-    }
-  }
-}
-function invertAlgTokens(alg) {
-  return alg.trim().split(/\s+/).filter(Boolean).reverse().map((t) =>
-    t.endsWith("2") ? t : t.endsWith("'") ? t.slice(0, -1) : `${t}'`
-  );
-}
-function getCubeAtStep(alg, stepIdx) {
-  const toks = alg.trim().split(/\s+/).filter(Boolean);
-  const c = createSolvedCube();
-  invertAlgTokens(alg).forEach((t) => applyCubeToken(c, t));
-  for (let i = 0; i < Math.min(stepIdx, toks.length); i++) applyCubeToken(c, toks[i]);
-  return c;
-}
-
-function renderTopDownLLSVG(cube, stickering) {
-  const isOLL = stickering === "OLL" || stickering === "CMLL" || stickering === "COLL";
-  const uCol = (f) => (isOLL ? (f === "U" ? STICKER_HEX.U : "#333740") : STICKER_HEX[f]);
-  const sCol = (f) => (isOLL ? (f === "U" ? STICKER_HEX.U : "#2a2d35") : STICKER_HEX[f]);
-  let out = `<svg viewBox="0 0 112 112" width="100%" height="100%">`;
-  for (let r = 0; r < 3; r++) for (let col = 0; col < 3; col++) {
-    out += `<rect x="${20 + col * 24}" y="${20 + r * 24}" width="22" height="22" rx="3" fill="${uCol(cube[r * 3 + col])}" stroke="#111" stroke-width="1.5"/>`;
-  }
-  const O = CUBE_OFF;
-  [O.B + 2, O.B + 1, O.B].forEach((idx, col) => { out += `<rect x="${20 + col * 24}" y="9" width="22" height="8" rx="2" fill="${sCol(cube[idx])}" stroke="#111" stroke-width="1.2"/>`; });
-  [O.F, O.F + 1, O.F + 2].forEach((idx, col) => { out += `<rect x="${20 + col * 24}" y="95" width="22" height="8" rx="2" fill="${sCol(cube[idx])}" stroke="#111" stroke-width="1.2"/>`; });
-  [O.L, O.L + 1, O.L + 2].forEach((idx, r) => { out += `<rect x="9" y="${20 + r * 24}" width="8" height="22" rx="2" fill="${sCol(cube[idx])}" stroke="#111" stroke-width="1.2"/>`; });
-  [O.R + 2, O.R + 1, O.R].forEach((idx, r) => { out += `<rect x="95" y="${20 + r * 24}" width="8" height="22" rx="2" fill="${sCol(cube[idx])}" stroke="#111" stroke-width="1.2"/>`; });
-  return `${out}</svg>`;
-}
-
-function renderIsoCubeSVG(cube, size = 24, cx = 100, cy = 88, vb = "0 0 200 176") {
-  const ux = [-0.866 * size, -0.5 * size], vx = [0.866 * size, -0.5 * size], dn = [0, size];
-  const pt = (a, b, d) => `${(cx + a * ux[0] + b * vx[0] + d * dn[0]).toFixed(1)},${(cy + a * ux[1] + b * vx[1] + d * dn[1]).toFixed(1)}`;
-  const poly = (pts, fill) => `<polygon points="${pts.join(" ")}" fill="${fill}" stroke="#111" stroke-width="2" stroke-linejoin="round"/>`;
-  const O = CUBE_OFF;
-  let out = `<svg viewBox="${vb}" width="100%" height="100%">`;
-  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
-    out += poly([pt(2 - c, 2 - r, 0), pt(3 - c, 2 - r, 0), pt(3 - c, 3 - r, 0), pt(2 - c, 3 - r, 0)], STICKER_HEX[cube[O.U + r * 3 + c]]);
-  }
-  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
-    out += poly([pt(2 - c, 0, r), pt(3 - c, 0, r), pt(3 - c, 0, r + 1), pt(2 - c, 0, r + 1)], STICKER_HEX[cube[O.F + r * 3 + c]]);
-  }
-  for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
-    out += poly([pt(0, c, r), pt(0, c + 1, r), pt(0, c + 1, r + 1), pt(0, c, r + 1)], STICKER_HEX[cube[O.R + r * 3 + c]]);
-  }
-  return `${out}</svg>`;
-}
-
-function renderAlgCaseVisual(item) {
-  const cube = getCubeAtStep(item.alg, 0);
-  const topDownCats = ["PLL", "OLL", "CMLL", "OCLL / COLL", "EPLL", "Last Layer"];
-  if (topDownCats.includes(item.cat)) return renderTopDownLLSVG(cube, item.stickering);
-  return renderIsoCubeSVG(cube, 23, 100, 86, "0 0 200 172");
-}
-
-function syncMethodViews() {
-  const method = METHOD_GUIDES[settings.profileMethod] ? settings.profileMethod : "CFOP";
-  guideNavTab.textContent = `${method} Guide`;
-  algPageTitle.textContent = `Alg Learner (${method})`;
-
-  const algs = METHOD_ALGS[method] || METHOD_ALGS.CFOP;
-  const cats = ["ALL", ...new Set(algs.map((a) => a.cat))];
-  activeAlgFilter = "ALL";
-  algSearchQuery = "";
-  const searchInput = $("alg-search-input");
-  if (searchInput) searchInput.value = "";
-  selectedAlgId = algs[0]?.id;
-
-  algFilterPills.innerHTML = cats.map((c, idx) =>
-    `<button class="btn-pill ${idx === 0 ? "active" : ""}" data-cat="${c}" type="button">${c === "ALL" ? "All" : c}</button>`
-  ).join("");
-
-  const guide = METHOD_GUIDES[method];
-  selectedStageId = guide.stages[0].id;
-  renderAlgs();
-  renderGuide();
-}
-
-function renderAlgs() {
-  const method = METHOD_ALGS[settings.profileMethod] ? settings.profileMethod : "CFOP";
-  const list = METHOD_ALGS[method];
-  const q = algSearchQuery.trim().toLowerCase();
-  const filtered = list.filter((a) => {
-    const catOk = activeAlgFilter === "ALL" || a.cat === activeAlgFilter;
-    const searchOk = !q || a.name.toLowerCase().includes(q) || a.cat.toLowerCase().includes(q) || a.alg.toLowerCase().includes(q) || a.tip.toLowerCase().includes(q);
-    return catOk && searchOk;
-  });
-
-  algGrid.innerHTML = "";
-  if (filtered.length === 0) {
-    algGrid.innerHTML = `<p class="muted-text">No algorithms match "${algSearchQuery}".</p>`;
-    return;
-  }
-
-  filtered.forEach((item) => {
-    const isLearned = learnedAlgs.includes(item.id);
-    const card = document.createElement("div");
-    card.className = `alg-card ${item.id === selectedAlgId ? "selected" : ""}`;
-    card.innerHTML = `
-      <div class="alg-card-top"><span class="alg-name">${item.name}</span><span class="alg-tag">${item.cat}</span></div>
-      <div class="alg-moves">${item.alg}</div>
-      <div class="alg-card-visual">${renderAlgCaseVisual(item)}</div>
-      <p class="alg-tip">${item.tip}</p>
-      <div class="alg-card-footer">
-        <button class="btn-outline" data-act="play" type="button">Load Player</button>
-        <button class="btn-pill ${isLearned ? "active" : ""}" data-act="learn" type="button">${isLearned ? "✓ Learned" : "Mark Learned"}</button>
-      </div>
-    `;
-    card.addEventListener("click", (e) => {
-      if (e.target.closest('button[data-act="learn"]')) {
-        e.stopPropagation();
-        learnedAlgs = learnedAlgs.includes(item.id) ? learnedAlgs.filter((x) => x !== item.id) : [...learnedAlgs, item.id];
-        localStorage.setItem(STORAGE_LEARNED_KEY, JSON.stringify(learnedAlgs));
-        renderAlgs();
-        return;
-      }
-      selectedAlgId = item.id;
-      loadAlgSimulator(item);
-      renderAlgs();
-    });
-    algGrid.appendChild(card);
-  });
-
-  const current = list.find((a) => a.id === selectedAlgId) || filtered[0];
-  if (current) loadAlgSimulator(current);
-}
-
-function stopAlgPlayback() {
-  clearInterval(algPlayTimer);
-  algPlayTimer = null;
-  algIsPlaying = false;
-  const playBtn = $("alg-play-btn");
-  if (playBtn) playBtn.textContent = "▶ Play";
-  if (activeAlgTwisty) {
-    try { activeAlgTwisty.pause?.(); } catch {}
-  }
-}
-
-function renderAlgSimulatorStage() {
-  if (!currentAlgItem) return;
-  const host = $("alg-sim-player");
-  const modeBtn = $("alg-view-mode-btn");
-  const speed = Number($("alg-speed-select")?.value || 1);
-  const canWebGL = Boolean(customElements.get("twisty-player"));
-  const useWebGL = algViewMode === "webgl" && canWebGL && activeTab === "algs";
-
-  if (modeBtn) modeBtn.textContent = useWebGL ? "3D Video" : "Step Cube";
-
-  if (useWebGL) {
-    host.innerHTML = "";
-    const tp = document.createElement("twisty-player");
-    tp.setAttribute("puzzle", "3x3x3");
-    tp.setAttribute("visualization", "3D");
-    tp.setAttribute("background", "none");
-    tp.setAttribute("control-panel", "bottom-row");
-    tp.setAttribute("experimental-setup-anchor", "end");
-    tp.setAttribute("experimental-stickering", currentAlgItem.stickering);
-    tp.setAttribute("alg", currentAlgItem.alg);
-    try { tp.tempoScale = speed; } catch {}
-    host.appendChild(tp);
-    activeAlgTwisty = tp;
-  } else {
-    activeAlgTwisty = null;
-    const cube = getCubeAtStep(currentAlgItem.alg, algStepIndex);
-    host.innerHTML = `<div style="width:100%;height:100%;display:grid;place-items:center;padding:8px;">${renderIsoCubeSVG(cube, 30, 110, 98, "0 0 220 200")}</div>`;
-  }
-  renderAlgMoveChips();
-}
-
-function renderAlgMoveChips() {
-  if (!currentAlgItem) return;
-  const toks = currentAlgItem.alg.trim().split(/\s+/).filter(Boolean);
-  algSimMoves.innerHTML = toks.map((t, i) => {
-    const cls = i === algStepIndex ? "current" : i < algStepIndex ? "done" : "";
-    return `<button class="move-chip ${cls}" data-step="${i + 1}" type="button">${t}</button>`;
-  }).join("");
-
-  algSimMoves.querySelectorAll(".move-chip").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      stopAlgPlayback();
-      algViewMode = "step";
-      algStepIndex = Number(chip.dataset.step);
-      renderAlgSimulatorStage();
-    });
-  });
-}
-
-function loadAlgSimulator(item) {
-  stopAlgPlayback();
-  currentAlgItem = item;
-  algStepIndex = 0;
-  algSimTitle.textContent = item.name;
-  algSimCat.textContent = item.cat;
-  algSimTip.textContent = item.tip;
-  renderAlgSimulatorStage();
-}
-
-function onTabVisible(tab) {
-  if (tab === "algs") {
-    const method = METHOD_ALGS[settings.profileMethod] ? settings.profileMethod : "CFOP";
-    const list = METHOD_ALGS[method];
-    const current = list.find((a) => a.id === selectedAlgId) || list[0];
-    if (current) loadAlgSimulator(current);
-  } else if (tab === "guide") {
-    stopAlgPlayback();
-    const guide = METHOD_GUIDES[settings.profileMethod] || METHOD_GUIDES.CFOP;
-    const st = guide.stages.find((s) => s.id === selectedStageId) || guide.stages[0];
-    if (st) loadStageSimulator(st);
-  } else {
-    stopAlgPlayback();
-  }
-}
-
-// Simulator playback & search events
-$("alg-search-input")?.addEventListener("input", (e) => {
-  algSearchQuery = e.target.value;
-  renderAlgs();
-});
-
-$("alg-view-mode-btn")?.addEventListener("click", () => {
-  stopAlgPlayback();
-  algViewMode = algViewMode === "webgl" ? "step" : "webgl";
-  renderAlgSimulatorStage();
-});
-
-$("alg-play-btn")?.addEventListener("click", () => {
-  if (!currentAlgItem) return;
-  const playBtn = $("alg-play-btn");
-  const toks = currentAlgItem.alg.trim().split(/\s+/).filter(Boolean);
-  const speed = Number($("alg-speed-select")?.value || 1);
-
-  if (algIsPlaying) {
-    stopAlgPlayback();
-    return;
-  }
-
-  if (algViewMode === "webgl" && activeAlgTwisty) {
-    try {
-      activeAlgTwisty.tempoScale = speed;
-      activeAlgTwisty.jumpToStart?.();
-      activeAlgTwisty.play?.();
-      algIsPlaying = true;
-      playBtn.textContent = "⏸ Pause";
-      const totalMs = Math.max(1200, Math.round((toks.length * 550) / speed));
-      algPlayTimer = setTimeout(() => { algIsPlaying = false; playBtn.textContent = "▶ Play"; }, totalMs);
-      return;
-    } catch {}
-  }
-
-  // Step-by-step Isometric Cube animation
-  if (algStepIndex >= toks.length) algStepIndex = 0;
-  algIsPlaying = true;
-  playBtn.textContent = "⏸ Pause";
-  renderAlgSimulatorStage();
-  algPlayTimer = setInterval(() => {
-    if (algStepIndex < toks.length) {
-      algStepIndex++;
-      renderAlgSimulatorStage();
-    } else {
-      stopAlgPlayback();
-    }
-  }, Math.round(550 / speed));
-});
-
-$("alg-reset-btn")?.addEventListener("click", () => {
-  stopAlgPlayback();
-  algStepIndex = 0;
-  renderAlgSimulatorStage();
-});
-
-$("alg-prev-btn")?.addEventListener("click", () => {
-  if (!currentAlgItem) return;
-  stopAlgPlayback();
-  algViewMode = "step";
-  algStepIndex = Math.max(0, algStepIndex - 1);
-  renderAlgSimulatorStage();
-});
-
-$("alg-next-btn")?.addEventListener("click", () => {
-  if (!currentAlgItem) return;
-  stopAlgPlayback();
-  algViewMode = "step";
-  const toks = currentAlgItem.alg.trim().split(/\s+/).filter(Boolean);
-  algStepIndex = Math.min(toks.length, algStepIndex + 1);
-  renderAlgSimulatorStage();
-});
-
-$("alg-speed-select")?.addEventListener("change", () => {
-  if (activeAlgTwisty) {
-    try { activeAlgTwisty.tempoScale = Number($("alg-speed-select").value); } catch {}
-  }
-});
-
-algFilterPills.addEventListener("click", (e) => {
-  const btn = e.target.closest("button[data-cat]");
-  if (!btn) return;
-  activeAlgFilter = btn.dataset.cat;
-  algFilterPills.querySelectorAll("button").forEach((b) => b.classList.toggle("active", b === btn));
-  renderAlgs();
-});
-
-function renderGuide() {
-  const guide = METHOD_GUIDES[settings.profileMethod] || METHOD_GUIDES.CFOP;
-  guidePageTitle.textContent = guide.title;
-  guidePageSubtitle.textContent = guide.subtitle;
-  stageList.innerHTML = "";
-
-  guide.stages.forEach((stage) => {
-    const card = document.createElement("div");
-    card.className = `stage-card ${stage.id === selectedStageId ? "active" : ""}`;
-    card.innerHTML = `
-      <div class="stage-header"><span class="stage-title">${stage.title}</span><span class="stage-split">${stage.split}</span></div>
-      <ul class="stage-points">${stage.points.map((p) => `<li>${p}</li>`).join("")}</ul>
-    `;
-    card.addEventListener("click", () => { selectedStageId = stage.id; loadStageSimulator(stage); renderGuide(); });
-    stageList.appendChild(card);
-  });
-
-  const activeStage = guide.stages.find((s) => s.id === selectedStageId) || guide.stages[0];
-  loadStageSimulator(activeStage);
-}
-
-function loadStageSimulator(stage) {
-  stageSimTitle.textContent = stage.title; stageSimBadge.textContent = stage.split;
-  const wrap = stagePlayer?.parentElement;
-  if (!wrap) return;
-  if (customElements.get("twisty-player") && activeTab === "guide") {
-    wrap.innerHTML = "";
-    const tp = document.createElement("twisty-player");
-    tp.id = "stage-player";
-    tp.setAttribute("puzzle", "3x3x3");
-    tp.setAttribute("visualization", "3D");
-    tp.setAttribute("background", "none");
-    tp.setAttribute("experimental-setup-anchor", "end");
-    tp.setAttribute("experimental-stickering", stage.stickering);
-    tp.setAttribute("alg", stage.alg);
-    wrap.appendChild(tp);
-  } else {
-    const cube = getCubeAtStep(stage.alg, 0);
-    wrap.innerHTML = `<div style="width:100%;height:100%;display:grid;place-items:center;">${renderIsoCubeSVG(cube, 30, 110, 98, "0 0 220 200")}</div>`;
-  }
-}
-
-// === SECTION A10: NAVIGATION, IMPORT/EXPORT, SETTINGS & PROFILE ===
-navTabs.forEach((btn) => btn.addEventListener("click", () => {
-  if (timerState === "running") return;
-  activeTab = btn.dataset.tab;
-  navTabs.forEach((b) => b.classList.toggle("active", b === btn));
-  viewTimer.classList.toggle("hidden", activeTab !== "timer");
-  viewAlgs.classList.toggle("hidden", activeTab !== "algs");
-  viewGuide.classList.toggle("hidden", activeTab !== "guide");
-  onTabVisible(activeTab);
-  btn.blur();
-}));
-
-function togglePenalty(id, type) {
-  const s = solves.find((x) => x.id === id);
-  if (!s) return;
-  s.penalty = s.penalty === type ? null : type;
-  saveSolves(); renderAll();
-  if (selectedSolveId === id) openSolveModal(id);
-}
-
-function deleteSolve(id) {
-  solves = solves.filter((x) => x.id !== id);
-  saveSolves();
-  if (selectedSolveId === id) closeModals();
-  renderAll();
-}
-
-eventSelect.addEventListener("change", () => {
-  settings.event = eventSelect.value; eventSelect.blur();
-  prefetchedScramble = null; prefetchedEvent = null;
-  saveSettings(); renderAll(); loadNextScramble(settings.event);
-});
+eventSelect.addEventListener("change", () => { settings.event = eventSelect.value; eventSelect.blur(); prefetchedScramble = null; prefetchedEvent = null; saveSettings(); renderAll(); loadNextScramble(settings.event); });
 trendRangeSelect.addEventListener("change", () => { updateSetting("trendRange", trendRangeSelect.value); trendRangeSelect.blur(); });
 trendFlattenBtn.addEventListener("click", () => { trendFlattenBtn.blur(); updateSetting("trendFlatten", !settings.trendFlatten); });
-inspTogglePill.addEventListener("click", () => {
-  inspTogglePill.blur();
-  if (timerState !== "idle") return;
-  updateSetting("inspection", !settings.inspection);
-});
-
+inspTogglePill.addEventListener("click", () => { inspTogglePill.blur(); if (timerState === "idle") updateSetting("inspection", !settings.inspection); });
 newScrambleBtn.addEventListener("click", () => { newScrambleBtn.blur(); loadNextScramble(settings.event); });
-copyScrambleBtn.addEventListener("click", async () => {
-  copyScrambleBtn.blur();
-  if (!currentScramble) return;
-  try { await navigator.clipboard.writeText(currentScramble); showToast("Scramble copied"); } catch {}
-});
-editGoalBtn.addEventListener("click", () => {
-  editGoalBtn.blur();
-  const val = prompt("Enter target Ao5 in seconds (e.g. 12.5):", (settings.goalMs / 1000).toFixed(2));
-  if (val === null) return;
-  const num = parseFloat(val);
-  if (!Number.isNaN(num) && num > 0) updateSetting("goalMs", Math.round(num * 1000));
-});
-
+copyScrambleBtn.addEventListener("click", async () => { copyScrambleBtn.blur(); if (currentScramble) try { await navigator.clipboard.writeText(currentScramble); showToast("Scramble copied"); } catch {} });
+editGoalBtn.addEventListener("click", () => { editGoalBtn.blur(); const v = prompt("Target Ao5 in seconds:", (settings.goalMs / 1000).toFixed(2)); const n = parseFloat(v); if (v !== null && !Number.isNaN(n) && n > 0) updateSetting("goalMs", Math.round(n * 1000)); });
 lastPlus2Btn.addEventListener("click", () => { const l = getCurrentEventSolves().slice(-1)[0]; if (l) togglePenalty(l.id, "+2"); });
 lastDnfBtn.addEventListener("click", () => { const l = getCurrentEventSolves().slice(-1)[0]; if (l) togglePenalty(l.id, "DNF"); });
 lastDelBtn.addEventListener("click", () => { const l = getCurrentEventSolves().slice(-1)[0]; if (l) deleteSolve(l.id); });
-
-clearSessionBtn.addEventListener("click", () => {
-  const list = getCurrentEventSolves();
-  if (!list.length || !confirm(`Clear all ${list.length} solves for ${settings.event}?`)) return;
-  solves = solves.filter((s) => s.event !== settings.event);
-  saveSolves(); renderAll();
-});
-
-exportBtn.addEventListener("click", () => {
-  const blob = new Blob([JSON.stringify(solves, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a"); a.href = url; a.download = `algtimer-solves-${new Date().toISOString().slice(0, 10)}.json`; a.click();
-  URL.revokeObjectURL(url);
-});
+clearSessionBtn.addEventListener("click", () => { const l = getCurrentEventSolves(); if (l.length && confirm(`Clear ${l.length} solves?`)) { solves = solves.filter((s) => s.event !== settings.event); saveSolves(); renderAll(); } });
+exportBtn.addEventListener("click", () => { const u = URL.createObjectURL(new Blob([JSON.stringify(solves, null, 2)], { type: "application/json" })); const a = document.createElement("a"); a.href = u; a.download = `algtimer-solves-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(u); });
 
 const triggerImport = () => { importFileInput.value = ""; importFileInput.click(); };
 importBtn.addEventListener("click", () => { importBtn.blur(); triggerImport(); });
 settingsImportBtn.addEventListener("click", () => { settingsImportBtn.blur(); triggerImport(); });
-
 importFileInput.addEventListener("change", async () => {
-  const file = importFileInput.files?.[0];
-  if (!file) return;
+  const file = importFileInput.files?.[0]; if (!file) return;
   try {
     const data = JSON.parse(await file.text());
-    let importedCount = 0, skippedDupes = 0;
-    const eventCounts = {};
-    const makeKey = (s) => `${s.event}|${s.rawMs}|${s.penalty || ""}|${s.scramble || ""}|${s.createdAt}`;
-    const existingKeys = new Set(solves.map(makeKey));
-
+    let inc = 0, dup = 0; const evC = {}, mk = (s) => `${s.event}|${s.rawMs}|${s.penalty || ""}|${s.scramble || ""}|${s.createdAt}`, ex = new Set(solves.map(mk));
     if (Array.isArray(data)) {
-      for (const item of data) {
-        if (!item || typeof item.rawMs !== "number") continue;
-        const s = {
-          id: item.id || String(Date.now() + Math.random()),
-          event: EVENT_TO_PUZZLE[item.event] ? item.event : "333",
-          rawMs: Math.max(1, Math.round(item.rawMs)),
-          penalty: item.penalty === "+2" || item.penalty === "DNF" ? item.penalty : null,
-          scramble: typeof item.scramble === "string" ? item.scramble : "",
-          createdAt: typeof item.createdAt === "number" ? item.createdAt : Date.now(),
-        };
-        if (existingKeys.has(makeKey(s))) { skippedDupes++; continue; }
-        existingKeys.add(makeKey(s)); solves.push(s); importedCount++;
-        eventCounts[s.event] = (eventCounts[s.event] || 0) + 1;
+      for (const it of data) {
+        if (!it || typeof it.rawMs !== "number") continue;
+        const s = { id: it.id || String(Date.now() + Math.random()), event: EVENT_TO_PUZZLE[it.event] ? it.event : "333", rawMs: Math.max(1, Math.round(it.rawMs)), penalty: it.penalty === "+2" || it.penalty === "DNF" ? it.penalty : null, scramble: typeof it.scramble === "string" ? it.scramble : "", createdAt: typeof it.createdAt === "number" ? it.createdAt : Date.now() };
+        if (ex.has(mk(s))) { dup++; continue; } ex.add(mk(s)); solves.push(s); inc++; evC[s.event] = (evC[s.event] || 0) + 1;
       }
     } else if (data && typeof data === "object") {
-      let sData = {};
-      if (typeof data.properties?.sessionData === "string") { try { sData = JSON.parse(data.properties.sessionData); } catch {} }
-      else if (data.properties?.sessionData) sData = data.properties.sessionData;
-
-      for (const [key, list] of Object.entries(data)) {
-        const match = key.match(/^session(\d+)$/);
-        if (!match || !Array.isArray(list)) continue;
-        const scrType = sData[match[1]]?.opt?.scrType || "333";
-        const mappedEvent = CSTIMER_EVENT_MAP[scrType] || "333";
-
-        for (const entry of list) {
-          if (!Array.isArray(entry) || !Array.isArray(entry[0])) continue;
-          const [flag, timeMs] = entry[0];
-          if (typeof timeMs !== "number" || timeMs <= 0) continue;
-          const s = {
-            id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()),
-            event: mappedEvent, rawMs: Math.round(timeMs),
-            penalty: flag === -1 ? "DNF" : flag === 2000 ? "+2" : null,
-            scramble: typeof entry[1] === "string" ? entry[1] : "",
-            createdAt: typeof entry[3] === "number" ? entry[3] * 1000 : Date.now(),
-          };
-          if (existingKeys.has(makeKey(s))) { skippedDupes++; continue; }
-          existingKeys.add(makeKey(s)); solves.push(s); importedCount++;
-          eventCounts[mappedEvent] = (eventCounts[mappedEvent] || 0) + 1;
+      let sData = {}; if (typeof data.properties?.sessionData === "string") try { sData = JSON.parse(data.properties.sessionData); } catch {} else if (data.properties?.sessionData) sData = data.properties.sessionData;
+      for (const [k, list] of Object.entries(data)) {
+        const m = k.match(/^session(\d+)$/); if (!m || !Array.isArray(list)) continue;
+        const mEv = CSTIMER_EVENT_MAP[sData[m[1]]?.opt?.scrType || "333"] || "333";
+        for (const en of list) {
+          if (!Array.isArray(en) || !Array.isArray(en[0])) continue;
+          const [flg, ms] = en[0]; if (typeof ms !== "number" || ms <= 0) continue;
+          const s = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random()), event: mEv, rawMs: Math.round(ms), penalty: flg === -1 ? "DNF" : flg === 2000 ? "+2" : null, scramble: typeof en[1] === "string" ? en[1] : "", createdAt: typeof en[3] === "number" ? en[3] * 1000 : Date.now() };
+          if (ex.has(mk(s))) { dup++; continue; } ex.add(mk(s)); solves.push(s); inc++; evC[mEv] = (evC[mEv] || 0) + 1;
         }
       }
-    } else throw new Error("Bad file");
-
-    solves.sort((a, b) => a.createdAt - b.createdAt);
-    saveSolves();
-    const topEv = Object.entries(eventCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
-    if (topEv && !eventCounts[settings.event]) {
-      settings.event = topEv; eventSelect.value = topEv; saveSettings(); loadNextScramble(topEv);
     }
-    renderAll();
-    showToast(`Imported ${importedCount} solves${skippedDupes ? ` (${skippedDupes} dupes skipped)` : ""}`);
-  } catch { showToast("Could not parse file. Export a JSON/txt backup from csTimer."); }
+    solves.sort((a, b) => a.createdAt - b.createdAt); saveSolves();
+    const topEv = Object.entries(evC).sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (topEv && !evC[settings.event]) { settings.event = topEv; eventSelect.value = topEv; saveSettings(); loadNextScramble(topEv); }
+    renderAll(); showToast(`Imported ${inc} solves${dup ? ` (${dup} dupes)` : ""}`);
+  } catch { showToast("Could not parse file."); }
 });
 
 function openSolveModal(id) {
-  const s = solves.find((x) => x.id === id);
-  if (!s) return;
-  selectedSolveId = id;
-  solveModalTime.textContent = formatSolve(s, settings.decimals);
-  solveModalMeta.textContent = `${s.event.toUpperCase()} • ${new Date(s.createdAt).toLocaleString()}`;
-  solveModalScramble.textContent = s.scramble || "(no scramble recorded)";
-  modalPlus2Btn.classList.toggle("active", s.penalty === "+2");
-  modalDnfBtn.classList.toggle("active", s.penalty === "DNF");
-  solveModal.classList.remove("hidden");
+  const s = solves.find((x) => x.id === id); if (!s) return;
+  selectedSolveId = id; $("solve-modal-time").textContent = formatSolve(s, settings.decimals);
+  $("solve-modal-meta").textContent = `${s.event.toUpperCase()} • ${new Date(s.createdAt).toLocaleString()}`;
+  $("solve-modal-scramble").textContent = s.scramble || "(no scramble)";
+  $("modal-plus2-btn").classList.toggle("active", s.penalty === "+2"); $("modal-dnf-btn").classList.toggle("active", s.penalty === "DNF");
+  $("solve-modal").classList.remove("hidden");
 }
-
-modalPlus2Btn.addEventListener("click", () => selectedSolveId && togglePenalty(selectedSolveId, "+2"));
-modalDnfBtn.addEventListener("click", () => selectedSolveId && togglePenalty(selectedSolveId, "DNF"));
-modalDelBtn.addEventListener("click", () => selectedSolveId && deleteSolve(selectedSolveId));
-closeSolveModalBtn.addEventListener("click", closeModals);
-
-settingsBtn.addEventListener("click", () => settingsModal.classList.remove("hidden"));
-closeSettingsBtn.addEventListener("click", closeModals);
-profileBtn.addEventListener("click", () => {
-  profileNameInput.value = settings.profileName;
-  profileMethodSelect.value = settings.profileMethod;
-  profileModal.classList.remove("hidden");
+$("modal-plus2-btn").addEventListener("click", () => selectedSolveId && togglePenalty(selectedSolveId, "+2"));
+$("modal-dnf-btn").addEventListener("click", () => selectedSolveId && togglePenalty(selectedSolveId, "DNF"));
+$("modal-del-btn").addEventListener("click", () => selectedSolveId && deleteSolve(selectedSolveId));
+$("close-solve-modal-btn").addEventListener("click", closeModals);
+$("settings-btn").addEventListener("click", () => $("settings-modal").classList.remove("hidden"));
+$("close-settings-btn").addEventListener("click", closeModals);
+$("profile-btn").addEventListener("click", () => { $("profile-name-input").value = settings.profileName; $("profile-method-select").value = settings.profileMethod; $("profile-modal").classList.remove("hidden"); });
+$("close-profile-btn").addEventListener("click", closeModals);
+$("save-profile-btn").addEventListener("click", () => {
+  settings.profileName = $("profile-name-input").value.trim() || "Cuber";
+  const mc = settings.profileMethod !== $("profile-method-select").value;
+  settings.profileMethod = $("profile-method-select").value; saveSettings(); applySettingsToUI();
+  if (mc) syncMethodViews(); closeModals(); showToast(`Profile saved (${settings.profileMethod})`);
 });
-closeProfileBtn.addEventListener("click", closeModals);
-saveProfileBtn.addEventListener("click", () => {
-  settings.profileName = profileNameInput.value.trim() || "Cuber";
-  const methodChanged = settings.profileMethod !== profileMethodSelect.value;
-  settings.profileMethod = profileMethodSelect.value;
-  saveSettings(); applySettingsToUI();
-  if (methodChanged) syncMethodViews();
-  closeModals();
-  showToast(`Profile saved (${settings.profileMethod})`);
-});
-
-[settingsModal, solveModal, profileModal].forEach((m) => m.addEventListener("click", (e) => { if (e.target === m) closeModals(); }));
-themeModal.addEventListener("click", (e) => { if (e.target === themeModal) cancelThemeStudio(); });
-function closeModals() { settingsModal.classList.add("hidden"); solveModal.classList.add("hidden"); profileModal.classList.add("hidden"); selectedSolveId = null; }
+[$("settings-modal"), $("solve-modal"), $("profile-modal")].forEach((m) => m.addEventListener("click", (e) => { if (e.target === m) closeModals(); }));
+$("theme-modal").addEventListener("click", (e) => { if (e.target === $("theme-modal")) cancelThemeStudio(); });
+function closeModals() { $("settings-modal").classList.add("hidden"); $("solve-modal").classList.add("hidden"); $("profile-modal").classList.add("hidden"); selectedSolveId = null; }
 
 function applySettingsToUI() {
   const root = document.documentElement.style;
-  root.setProperty("--timer-size", `${settings.timerSize}rem`);
-  root.setProperty("--scramble-size", `${settings.scrambleSize}rem`);
-  root.setProperty("--sidebar-width", `${settings.sidebarWidth}px`);
-  document.body.classList.toggle("focus-extra-blur", settings.focusBgBehavior === "blur");
-  document.body.classList.toggle("focus-dim", settings.focusBgBehavior === "dim");
-
-  holdDelayInput.value = settings.holdDelayMs; holdDelayValue.textContent = `${settings.holdDelayMs}ms`;
-  decimalsSeg.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("active", Number(b.dataset.dec) === settings.decimals));
-  inspEnabledInput.checked = Boolean(settings.inspection);
-  inspAudioInput.checked = Boolean(settings.inspectionAudio);
-  inspTogglePill.textContent = settings.inspection ? "Insp: 15s" : "Insp: Off";
-  inspTogglePill.classList.toggle("active", Boolean(settings.inspection));
+  root.setProperty("--timer-size", `${settings.timerSize}rem`); root.setProperty("--scramble-size", `${settings.scrambleSize}rem`); root.setProperty("--sidebar-width", `${settings.sidebarWidth}px`);
+  document.body.classList.toggle("focus-extra-blur", settings.focusBgBehavior === "blur"); document.body.classList.toggle("focus-dim", settings.focusBgBehavior === "dim");
+  $("setting-hold-delay").value = settings.holdDelayMs; $("hold-delay-value").textContent = `${settings.holdDelayMs}ms`;
+  $("decimals-seg").querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("active", Number(b.dataset.dec) === settings.decimals));
+  $("setting-inspection").checked = Boolean(settings.inspection); $("setting-inspection-audio").checked = Boolean(settings.inspectionAudio);
+  inspTogglePill.textContent = settings.inspection ? "Insp: 15s" : "Insp: Off"; inspTogglePill.classList.toggle("active", Boolean(settings.inspection));
   trendFlattenBtn.classList.toggle("active", Boolean(settings.trendFlatten));
-
-  focusModeInput.checked = settings.focusMode; focusBgSelect.value = settings.focusBgBehavior;
-  timerSizeInput.value = settings.timerSize; timerSizeValue.textContent = `${settings.timerSize}rem`;
-  scrambleSizeInput.value = settings.scrambleSize; scrambleSizeValue.textContent = `${settings.scrambleSize}rem`;
-  sidebarWidthInput.value = settings.sidebarWidth; sidebarWidthValue.textContent = `${settings.sidebarWidth}px`;
-  profileNameLabel.textContent = settings.profileName;
-  profileAvatar.textContent = (settings.profileName[0] || "C").toUpperCase();
-
-  if (timerState === "idle") {
-    timerHintText.textContent = settings.inspection ? "Tap SPACE or CLICK to inspect (15s)" : "Hold SPACE or CLICK to ready";
-  }
+  $("setting-focus-mode").checked = settings.focusMode; $("setting-focus-bg").value = settings.focusBgBehavior;
+  $("setting-timer-size").value = settings.timerSize; $("timer-size-value").textContent = `${settings.timerSize}rem`;
+  $("setting-scramble-size").value = settings.scrambleSize; $("scramble-size-value").textContent = `${settings.scrambleSize}rem`;
+  $("setting-sidebar-width").value = settings.sidebarWidth; $("sidebar-width-value").textContent = `${settings.sidebarWidth}px`;
+  $("profile-name-label").textContent = settings.profileName; $("profile-avatar").textContent = (settings.profileName[0] || "C").toUpperCase();
+  if (timerState === "idle") timerHintText.textContent = settings.inspection ? "Tap SPACE or CLICK to inspect (15s)" : "Hold SPACE or CLICK to ready";
 }
 
-function updateSetting(key, value) { settings[key] = value; saveSettings(); applySettingsToUI(); renderAll(); }
-holdDelayInput.addEventListener("input", () => updateSetting("holdDelayMs", Number(holdDelayInput.value)));
-decimalsSeg.addEventListener("click", (e) => { const b = e.target.closest("button[data-dec]"); if (b) updateSetting("decimals", Number(b.dataset.dec)); });
-inspEnabledInput.addEventListener("change", () => updateSetting("inspection", inspEnabledInput.checked));
-inspAudioInput.addEventListener("change", () => updateSetting("inspectionAudio", inspAudioInput.checked));
-focusModeInput.addEventListener("change", () => updateSetting("focusMode", focusModeInput.checked));
-focusBgSelect.addEventListener("change", () => updateSetting("focusBgBehavior", focusBgSelect.value));
-timerSizeInput.addEventListener("input", () => updateSetting("timerSize", Number(timerSizeInput.value)));
-scrambleSizeInput.addEventListener("input", () => updateSetting("scrambleSize", Number(scrambleSizeInput.value)));
-sidebarWidthInput.addEventListener("input", () => updateSetting("sidebarWidth", Number(sidebarWidthInput.value)));
+function updateSetting(k, v) { settings[k] = v; saveSettings(); applySettingsToUI(); renderAll(); }
+$("setting-hold-delay").addEventListener("input", () => updateSetting("holdDelayMs", Number($("setting-hold-delay").value)));
+$("decimals-seg").addEventListener("click", (e) => { const b = e.target.closest("button[data-dec]"); if (b) updateSetting("decimals", Number(b.dataset.dec)); });
+$("setting-inspection").addEventListener("change", () => updateSetting("inspection", $("setting-inspection").checked));
+$("setting-inspection-audio").addEventListener("change", () => updateSetting("inspectionAudio", $("setting-inspection-audio").checked));
+$("setting-focus-mode").addEventListener("change", () => updateSetting("focusMode", $("setting-focus-mode").checked));
+$("setting-focus-bg").addEventListener("change", () => updateSetting("focusBgBehavior", $("setting-focus-bg").value));
+$("setting-timer-size").addEventListener("input", () => updateSetting("timerSize", Number($("setting-timer-size").value)));
+$("setting-scramble-size").addEventListener("input", () => updateSetting("scrambleSize", Number($("setting-scramble-size").value)));
+$("setting-sidebar-width").addEventListener("input", () => updateSetting("sidebarWidth", Number($("setting-sidebar-width").value)));
 
 function saveSolves() { localStorage.setItem(STORAGE_SOLVES_KEY, JSON.stringify(solves)); }
 function saveSettings() { localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(settings)); }
-function loadArray(key) {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(key));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch { return []; }
-}
-function loadJSON(key, fallback, merge = false) {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(key));
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return fallback;
-    return merge ? { ...fallback, ...parsed } : parsed;
-  } catch { return fallback; }
-}
+function loadArray(k) { try { const p = JSON.parse(localStorage.getItem(k)); return Array.isArray(p) ? p : []; } catch { return []; } }
+function loadJSON(k, fb, merge = false) { try { const p = JSON.parse(localStorage.getItem(k)); return p && typeof p === "object" && !Array.isArray(p) ? (merge ? { ...fb, ...p } : p) : fb; } catch { return fb; } }
 
 init();
