@@ -67,10 +67,31 @@ export const SCENE_PRESETS = [
   { id: "s-aurora", name: "Aurora Night", desc: "Northern lights + mint", theme: { mood: "aqua", bgMode: "scene", sceneId: "aurora", bgBlur: 9, bgDim: 34, bgPosY: 50, bgScale: 106, bgColor: "#040814", sidebarColor: "#091121", cardColor: "#101d33", scrambleColor: "#0d1729", textColor: "#ecfeff", mutedColor: "#7dd3fc", accentColor: "#2dd4bf", holdingColor: "#fb7185", readyColor: "#2dd4bf", sidebarAlpha: 74, sidebarBlur: 18, timerBackdrop: false, scrambleBox: true, radius: 12 } },
 ];
 
-// Complete WCA OLLs (1-57) & PLLs (21) for CFOP
-import { PLL_CASES } from "./trainer.js";
+export const PLL_CASES = [
+  { id: "pll-aa", name: "Aa-Perm", cat: "PLL", stickering: "PLL", alg: "R' F R' B2 R F' R' B2 R2", tip: "Headlights in back, 2x2 block in front-left." },
+  { id: "pll-ab", name: "Ab-Perm", cat: "PLL", stickering: "PLL", alg: "R2 B2 R F R' B2 R F' R", tip: "Headlights on left, 2x2 block in front-right." },
+  { id: "pll-e", name: "E-Perm", cat: "PLL", stickering: "PLL", alg: "R B' R' F R B R' F' R B R' F R B' R' F'", tip: "Adjacent corners swap." },
+  { id: "pll-f", name: "F-Perm", cat: "PLL", stickering: "PLL", alg: "R' U' F' R U R' U' R' F R2 U' R' U' R U R' U R", tip: "Full 3-sticker bar on left." },
+  { id: "pll-ga", name: "Ga-Perm", cat: "PLL", stickering: "PLL", alg: "R2 U R' U R' U' R U' R2 D U' R' U R D'", tip: "Headlights on left, 2-block front-right." },
+  { id: "pll-gb", name: "Gb-Perm", cat: "PLL", stickering: "PLL", alg: "R' U' R U D' R2 U R' U R U' R U' R2 D", tip: "Headlights on left, 2-block in back." },
+  { id: "pll-gc", name: "Gc-Perm", cat: "PLL", stickering: "PLL", alg: "R2 U' R U' R U R' U R2 D' U R U' R' D", tip: "Headlights on left, 2-block back-right." },
+  { id: "pll-gd", name: "Gd-Perm", cat: "PLL", stickering: "PLL", alg: "R U R' U' D R2 U' R U' R' U R' U R2 D'", tip: "Headlights on left, 2-block in front." },
+  { id: "pll-h", name: "H-Perm", cat: "PLL", stickering: "PLL", alg: "M2 U M2 U2 M2 U M2", tip: "Opposite edge swap across 4 faces." },
+  { id: "pll-ja", name: "Ja-Perm", cat: "PLL", stickering: "PLL", alg: "L' U' L F L' U' L U L F' L2 U L U", tip: "Full bar on left, 2-block front-left." },
+  { id: "pll-jb", name: "Jb-Perm", cat: "PLL", stickering: "PLL", alg: "R U R' F' R U R' U' R' F R2 U' R' U'", tip: "Full bar on left, 2-block front-right." },
+  { id: "pll-na", name: "Na-Perm", cat: "PLL", stickering: "PLL", alg: "R U R' U R U R' F' R U R' U' R' F R2 U' R' U2 R U' R'", tip: "Four 2-sticker blocks CW." },
+  { id: "pll-nb", name: "Nb-Perm", cat: "PLL", stickering: "PLL", alg: "R' U R U' R' F' U' F R U R' F R' F' R U' R", tip: "Four 2-sticker blocks CCW." },
+  { id: "pll-ra", name: "Ra-Perm", cat: "PLL", stickering: "PLL", alg: "R U' R' U' R U R D R' U' R D' R' U2 R'", tip: "Headlights on left, 2-block in front." },
+  { id: "pll-rb", name: "Rb-Perm", cat: "PLL", stickering: "PLL", alg: "R' U2 R U2 R' F R U R' U' R' F' R2", tip: "Headlights in front, 2-block on right." },
+  { id: "pll-t", name: "T-Perm", cat: "PLL", stickering: "PLL", alg: "R U R' U' R' F R2 U' R' U' R U R' F'", tip: "Headlights on left + bars on top/bottom." },
+  { id: "pll-ua", name: "Ua-Perm", cat: "PLL", stickering: "PLL", alg: "R U' R U R U R U' R' U' R2", tip: "Solved bar in back; edges cycle CCW." },
+  { id: "pll-ub", name: "Ub-Perm", cat: "PLL", stickering: "PLL", alg: "R2 U R U R' U' R' U' R' U R'", tip: "Solved bar in back; edges cycle CW." },
+  { id: "pll-v", name: "V-Perm", cat: "PLL", stickering: "PLL", alg: "R' U R' U' R D' R' D R' U D' R2 U' R2 D R2", tip: "2x2 block in front-left." },
+  { id: "pll-y", name: "Y-Perm", cat: "PLL", stickering: "PLL", alg: "F R U' R' U' R U R' F' R U R' U' R' F R F'", tip: "Diagonal corner swap." },
+  { id: "pll-z", name: "Z-Perm", cat: "PLL", stickering: "PLL", alg: "M' U M2 U M2 U M' U2 M2", tip: "Adjacent 2-edge pair swaps." },
+];
 
-const FULL_OLL_ALGS = [
+export const FULL_OLL_ALGS = [
   { id: "oll-1", name: "OLL 1 (Dot)", cat: "OLL", stickering: "OLL", alg: "R U2 R2 F R F' U2 R' F R F'", tip: "No edges oriented." },
   { id: "oll-2", name: "OLL 2 (Dot)", cat: "OLL", stickering: "OLL", alg: "F R U R' U' F' U2 F R U R' U' F'", tip: "No edges oriented." },
   { id: "oll-3", name: "OLL 3 (Dot)", cat: "OLL", stickering: "OLL", alg: "f R U R' U' f' U f R U R' U' f'", tip: "No edges oriented." },
@@ -135,40 +156,37 @@ export const METHOD_GUIDES = {
     title: "CFOP Solve Guide",
     subtitle: "Cross, F2L, OLL, and PLL—optimize every split of your solve.",
     stages: [
-      { id: "cfop-cross", title: "1. Cross", split: "~12% of solve • <= 8 moves", stickering: "Cross", alg: "F R' D' R F2", points: ["<strong>Solve on Bottom (D):</strong> Keep white/yellow on D so you transition directly into F2L with zero cube flips.", "<strong>Plan all 4 edges in inspection:</strong> Learn relative color order (Blue-Orange-Green-Red) so you don't align centers early.", "<strong>8-move rule:</strong> Every 3x3 cross can be solved in 8 moves or fewer."] },
-      { id: "cfop-f2l", title: "2. F2L (First Two Layers)", split: "~50% of solve • Core speed", stickering: "F2L", alg: "U R U' R' U' F' U F", points: ["<strong>Fill back slots first:</strong> Solving BL/BR early keeps open pieces visible in front.", "<strong>Limit cube rotations:</strong> Use wide inserts or sledgehammers (R' F R F') instead of rotating twice.", "<strong>Lookahead drill:</strong> Turn at 60% speed with zero pauses between pairs."] },
-      { id: "cfop-oll", title: "3. OLL (Orient Last Layer)", split: "~18% of solve • All 57 OLLs", stickering: "OLL", alg: "F R U R' U' F' R U R' U R U2 R'", points: ["<strong>Full OLL:</strong> Learn all 57 cases to orient the last layer in one look.", "<strong>Use triggers:</strong> Group moves into Sexy (R U R' U') and Sledge (R' F R F')."] },
-      { id: "cfop-pll", title: "4. PLL (Permute Last Layer)", split: "~20% of solve • All 21 PLLs", stickering: "PLL", alg: "R U R' U' R' F R2 U' R' U' R U R' F'", points: ["<strong>Full PLL:</strong> Master all 21 permutation cases.", "<strong>2-sided recognition:</strong> Check Front + Right faces for headlights and blocks without spinning."] },
+      { id: "cfop-cross", title: "1. Cross", split: "~12% of solve • <= 8 moves", stickering: "Cross", alg: "F R' D' R F2", points: ["<strong>Solve on Bottom (D):</strong> Keep white/yellow on D so you transition directly into F2L with zero cube flips.", "<strong>Plan all 4 edges in inspection:</strong> Learn relative color order (Blue-Orange-Green-Red) so you don't align centers early."] },
+      { id: "cfop-f2l", title: "2. F2L (First Two Layers)", split: "~50% of solve", stickering: "F2L", alg: "U R U' R' U' F' U F", points: ["<strong>Fill back slots first:</strong> Solving BL/BR early keeps open pieces visible in front."] },
+      { id: "cfop-oll", title: "3. OLL (Orient Last Layer)", split: "~18% of solve • All 57 OLLs", stickering: "OLL", alg: "F R U R' U' F' R U R' U R U2 R'", points: ["<strong>Full OLL:</strong> Learn all 57 cases to orient the last layer in one look."] },
+      { id: "cfop-pll", title: "4. PLL (Permute Last Layer)", split: "~20% of solve • All 21 PLLs", stickering: "PLL", alg: "R U R' U' R' F R2 U' R' U' R U R' F'", points: ["<strong>Full PLL:</strong> Master all 21 permutation cases."] },
     ],
   },
   Roux: {
-    title: "Roux Solve Guide",
-    subtitle: "Blockbuilding + M-slice mastery—intuitive, low-movecount speed.",
+    title: "Roux Solve Guide", subtitle: "Blockbuilding + M-slice mastery.",
     stages: [
-      { id: "roux-fb", title: "1. First Block (FB)", split: "~20% of solve • <= 9 moves", stickering: "FirstBlock", alg: "L' U' L M' U2 r U' r'", points: ["<strong>Build a 1x2x3 on Left:</strong> Solve DL edge + two left-side pairs freely."] },
-      { id: "roux-sb", title: "2. Second Block (SB)", split: "~32% of solve", stickering: "SecondBlock", alg: "R U' R' U2 r U r'", points: ["<strong>Build a 1x2x3 on Right:</strong> Pair DR edge + two right slots using R, r, U, M."] },
-      { id: "roux-cmll", title: "3. CMLL", split: "~22% of solve • 42 algs", stickering: "CMLL", alg: "R U R' U R U2 R'", points: ["<strong>Orient/Permute Corners:</strong> Solve 4 U-layer corners while preserving M-slice."] },
-      { id: "roux-lse", title: "4. LSE", split: "~26% of solve • Pure M & U", stickering: "full", alg: "M' U M' U2 M U M' U2 M' U2", points: ["<strong>Last 6 Edges:</strong> Orient edges (EO), insert UL/UR, and finish M-slice."] },
+      { id: "roux-fb", title: "1. First Block", split: "~20% of solve", stickering: "FirstBlock", alg: "L' U' L M' U2 r U' r'", points: ["<strong>1x2x3 on Left:</strong> Solve DL edge + left pairs."] },
+      { id: "roux-sb", title: "2. Second Block", split: "~32% of solve", stickering: "SecondBlock", alg: "R U' R' U2 r U r'", points: ["<strong>1x2x3 on Right:</strong> Pair DR edge + right slots."] },
+      { id: "roux-cmll", title: "3. CMLL", split: "~22% of solve", stickering: "CMLL", alg: "R U R' U R U2 R'", points: ["<strong>Corners:</strong> Solve 4 U-layer corners preserving M-slice."] },
+      { id: "roux-lse", title: "4. LSE", split: "~26% of solve", stickering: "full", alg: "M' U M' U2 M U M' U2 M' U2", points: ["<strong>Last 6 Edges:</strong> EO, UL/UR, and EP."] },
     ],
   },
   ZZ: {
-    title: "ZZ Solve Guide",
-    subtitle: "Edge Orientation first—pure R, U, L ergonomics.",
+    title: "ZZ Solve Guide", subtitle: "Edge Orientation first.",
     stages: [
-      { id: "zz-eo", title: "1. EOLine", split: "~18% of solve", stickering: "EO", alg: "F R' F' D R' D'", points: ["<strong>Orient 12 Edges:</strong> Flip bad edges so all future F2L needs only R, U, L."] },
-      { id: "zz-f2l", title: "2. ZZF2L", split: "~48% of solve • Rotationless", stickering: "F2L", alg: "R U' R' U2 L' U L", points: ["<strong>Zero Rotations:</strong> Build blocks smoothly without y/y' cube rotations."] },
-      { id: "zz-ocll", title: "3. OCLL / COLL", split: "~16% of solve", stickering: "COLL", alg: "R U R' U R U2 R'", points: ["<strong>Top Cross Done:</strong> EO guarantees top cross is already oriented."] },
-      { id: "zz-pll", title: "4. EPLL", split: "~18% of solve", stickering: "PLL", alg: "M2 U M2 U2 M2 U M2", points: ["<strong>Easy Finish:</strong> Finish with simple 4-edge permutations."] },
+      { id: "zz-eo", title: "1. EOLine", split: "~18% of solve", stickering: "EO", alg: "F R' F' D R' D'", points: ["<strong>Orient 12 Edges:</strong> R, U, L ergonomics for the rest."] },
+      { id: "zz-f2l", title: "2. ZZF2L", split: "~48% of solve", stickering: "F2L", alg: "R U' R' U2 L' U L", points: ["<strong>Zero Rotations:</strong> Build blocks smoothly."] },
+      { id: "zz-ocll", title: "3. OCLL / COLL", split: "~16% of solve", stickering: "COLL", alg: "R U R' U R U2 R'", points: ["<strong>Top Cross Done:</strong> EO guarantees top cross is oriented."] },
+      { id: "zz-pll", title: "4. EPLL", split: "~18% of solve", stickering: "PLL", alg: "M2 U M2 U2 M2 U M2", points: ["<strong>Easy Finish:</strong> Simple 4-edge permutations."] },
     ],
   },
   Beginner: {
-    title: "Beginner Layer-by-Layer Guide",
-    subtitle: "Master the cube with 4 core algorithms.",
+    title: "Beginner Layer-by-Layer Guide", subtitle: "Master the cube with 4 core algorithms.",
     stages: [
-      { id: "beg-cross", title: "1. White Cross", split: "Step 1", stickering: "Cross", alg: "F2 U R' F R", points: ["<strong>Daisy & Drop:</strong> Build white daisy on yellow center, match and drop down."] },
-      { id: "beg-corners", title: "2. First Layer Corners", split: "Step 2", stickering: "F2L", alg: "R U R' U'", points: ["<strong>Right Trigger:</strong> Repeat R U R' U' until white corners drop in."] },
-      { id: "beg-mid", title: "3. Middle Layer Edges", split: "Step 3", stickering: "F2L", alg: "U R U' R' U' F' U F", points: ["<strong>Push Away:</strong> Insert top non-yellow edge into middle slots."] },
-      { id: "beg-ll", title: "4. Last Layer", split: "Step 4", stickering: "LL", alg: "F R U R' U' F'", points: ["<strong>Cross, Edges & Corners:</strong> Complete yellow face and solve final layer."] },
+      { id: "beg-cross", title: "1. White Cross", split: "Step 1", stickering: "Cross", alg: "F2 U R' F R", points: ["<strong>Daisy & Drop:</strong> Build white daisy on yellow center."] },
+      { id: "beg-corners", title: "2. First Corners", split: "Step 2", stickering: "F2L", alg: "R U R' U'", points: ["<strong>Right Trigger:</strong> Repeat R U R' U' until white corners drop in."] },
+      { id: "beg-mid", title: "3. Middle Edges", split: "Step 3", stickering: "F2L", alg: "U R U' R' U' F' U F", points: ["<strong>Push Away:</strong> Insert top non-yellow edge into middle slots."] },
+      { id: "beg-ll", title: "4. Last Layer", split: "Step 4", stickering: "LL", alg: "F R U R' U' F'", points: ["<strong>Cross, Edges & Corners:</strong> Complete yellow face and solve."] },
     ],
   },
 };
