@@ -714,76 +714,189 @@ function renderSparkline(eventSolves) {
   });
 }
 
+let advStatsViewMode = "all"; // "all" | "table" | "charts"
+
 function renderAdvancedStats(eventSolves) {
-  const dec = settings.decimals, validEntries = eventSolves.map((s, i) => ({ idx: i + 1, ms: getEffectiveMs(s), createdAt: s.createdAt })).filter((d) => d.ms !== Infinity), valid = validEntries.map((d) => d.ms);
-  const dnfC = eventSolves.filter((s) => s.penalty === "DNF").length, p2C = eventSolves.filter((s) => s.penalty === "+2").length;
+  const dec = settings.decimals;
+  const validEntries = eventSolves
+    .map((s, i) => ({ idx: i + 1, ms: getEffectiveMs(s), createdAt: s.createdAt }))
+    .filter((d) => d.ms !== Infinity);
+  const valid = validEntries.map((d) => d.ms);
+  const dnfC = eventSolves.filter((s) => s.penalty === "DNF").length;
+  const p2C = eventSolves.filter((s) => s.penalty === "+2").length;
+
   advStatsSubtitle.textContent = `${eventSolves.length} solves (${valid.length} valid, ${dnfC} DNF, ${p2C} +2)`;
-  if (valid.length < 2) { advStatsBody.innerHTML = `<p class="muted-text">Complete at least 2 valid solves to unlock visual analytics.</p>`; return; }
 
-  const mean = calculateSessionMean(eventSolves), best = calculateBest(eventSolves), worst = Math.max(...valid);
-  const stdDev = Math.sqrt(valid.reduce((acc, t) => acc + (t - mean) ** 2, 0) / valid.length), consistency = Math.max(0, 100 - (stdDev / mean) * 100);
+  if (valid.length < 2) {
+    advStatsBody.innerHTML = `<p class="muted-text">Complete at least 2 valid solves to unlock stats.</p>`;
+    return;
+  }
 
-  const allB = [{ label: "0–5s", min: 0, max: 5000 }, { label: "5–10s", min: 5000, max: 10000 }, { label: "10–15s", min: 10000, max: 15000 }, { label: "15–20s", min: 15000, max: 20000 }, { label: "20–25s", min: 20000, max: 25000 }, { label: "25–30s", min: 25000, max: 30000 }, { label: "30–45s", min: 30000, max: 45000 }, { label: "45s+", min: 45000, max: Infinity }].map((b) => { const it = valid.filter((t) => t >= b.min && t < b.max); return { ...b, count: it.length, avg: it.length ? it.reduce((a, x) => a + x, 0) / it.length : null }; });
-  const activeB = allB.slice(Math.max(0, allB.findIndex((b) => b.count > 0)), allB.length - [...allB].reverse().findIndex((b) => b.count > 0));
+  const mean = calculateSessionMean(eventSolves);
+  const best = calculateBest(eventSolves);
+  const worst = Math.max(...valid);
+  const stdDev = Math.sqrt(valid.reduce((acc, t) => acc + (t - mean) ** 2, 0) / valid.length);
+  const consistency = Math.max(0, 100 - (stdDev / mean) * 100);
+
+  // 1. Time Brackets
+  const allB = [
+    { label: "0–5s", min: 0, max: 5000 },
+    { label: "5–10s", min: 5000, max: 10000 },
+    { label: "10–15s", min: 10000, max: 15000 },
+    { label: "15–20s", min: 15000, max: 20000 },
+    { label: "20–25s", min: 20000, max: 25000 },
+    { label: "25–30s", min: 25000, max: 30000 },
+    { label: "30–45s", min: 30000, max: 45000 },
+    { label: "45s+", min: 45000, max: Infinity },
+  ].map((b) => {
+    const it = valid.filter((t) => t >= b.min && t < b.max);
+    return { ...b, count: it.length, avg: it.length ? it.reduce((a, x) => a + x, 0) / it.length : null };
+  });
+
+  const firstIdx = allB.findIndex((b) => b.count > 0);
+  const lastIdx = allB.length - 1 - [...allB].reverse().findIndex((b) => b.count > 0);
+  const activeB = allB.slice(Math.max(0, firstIdx), Math.min(allB.length, lastIdx + 1));
   const maxB = Math.max(...activeB.map((b) => b.count), 1);
-  const bracketsHtml = activeB.map((b) => `<div class="bracket-row chart-tip-target" data-tip="${b.label}: ${b.count} solves (${Math.round((b.count / valid.length) * 100)}%)${b.avg ? ` • Avg ${formatTime(b.avg, dec)}` : ""}"><span>${b.label}</span><div class="bracket-track"><div class="bracket-fill" style="width:${Math.round((b.count / maxB) * 100)}%"></div></div><span class="bracket-val">${b.count} (${Math.round((b.count / valid.length) * 100)}%)</span></div>`).join("");
+  const bracketsHtml = activeB.map((b) => `
+    <div class="bracket-row chart-tip-target" data-tip="${b.label}: ${b.count} solves (${Math.round((b.count / valid.length) * 100)}%)${b.avg ? ` • Avg ${formatTime(b.avg, dec)}` : ""}">
+      <span>${b.label}</span>
+      <div class="bracket-track"><div class="bracket-fill" style="width:${Math.round((b.count / maxB) * 100)}%"></div></div>
+      <span class="bracket-val">${b.count} (${Math.round((b.count / valid.length) * 100)}%)</span>
+    </div>
+  `).join("");
 
-  const trajW = 360, trajH = 142, tPadL = 36, tPadR = 10, tPadT = 12, tPadB = 20, pbPts = [], rollPts = [], rWin = valid.length >= 12 ? 12 : 3;
+  // 2. Trajectory Chart
+  const trajW = 360, trajH = 142, tPadL = 36, tPadR = 10, tPadT = 12, tPadB = 20;
   let rPB = Infinity;
-  for (let i = 0; i < valid.length; i++) { if (valid[i] < rPB) rPB = valid[i]; pbPts.push(rPB); const sl = valid.slice(Math.max(0, i - rWin + 1), i + 1); rollPts.push(sl.reduce((a, b) => a + b, 0) / sl.length); }
+  const pbPts = [], rollPts = [], rWin = valid.length >= 12 ? 12 : 3;
+  for (let i = 0; i < valid.length; i++) {
+    if (valid[i] < rPB) rPB = valid[i];
+    pbPts.push(rPB);
+    const sl = valid.slice(Math.max(0, i - rWin + 1), i + 1);
+    rollPts.push(sl.reduce((a, b) => a + b, 0) / sl.length);
+  }
   const n = valid.length, sX = (n * (n - 1)) / 2, sXX = (n * (n - 1) * (2 * n - 1)) / 6, sY = valid.reduce((a, b) => a + b, 0), sXY = valid.reduce((a, y, i) => a + i * y, 0);
   const slp10 = ((n * sXX - sX * sX) ? (n * sXY - sX * sY) / (n * sXX - sX * sX) : 0) * 10;
   const slopeText = slp10 <= -20 ? `↗ -${formatTime(Math.abs(slp10), 2)}s / 10` : slp10 >= 20 ? `↘ +${formatTime(slp10, 2)}s / 10` : "→ Steady";
   const tMin = Math.min(...pbPts, ...rollPts), tMax = Math.max(...pbPts, ...rollPts), tSpan = Math.max(1, tMax - tMin), tMid = (tMin + tMax) / 2;
-  const tx = (i) => tPadL + (i / (n - 1)) * (trajW - tPadL - tPadR), ty = (v) => tPadT + (1 - (v - tMin) / tSpan) * (trajH - tPadT - tPadB);
-  const trajHits = []; for (let i = 0; i < n; i += Math.max(1, Math.floor(n / 24))) trajHits.push(`<circle class="chart-tip-target" cx="${tx(i).toFixed(1)}" cy="${ty(rollPts[i]).toFixed(1)}" r="7" fill="transparent" data-tip="Solve #${validEntries[i].idx} • Ao${rWin}: ${formatTime(rollPts[i], dec)} • PB: ${formatTime(pbPts[i], dec)}" style="cursor:crosshair"/>`);
+  const tx = (i) => tPadL + (i / (n - 1)) * (trajW - tPadL - tPadR);
+  const ty = (v) => tPadT + (1 - (v - tMin) / tSpan) * (trajH - tPadT - tPadB);
 
+  // 3. Hourly Performance
   const hB = Array.from({ length: 24 }, (_, hr) => ({ hr, sum: 0, count: 0, best: Infinity }));
-  validEntries.forEach((e) => { const hr = new Date(e.createdAt).getHours(); hB[hr].sum += e.ms; hB[hr].count++; if (e.ms < hB[hr].best) hB[hr].best = e.ms; });
-  const actH = hB.filter((h) => h.count > 0), maxHC = Math.max(...actH.map((h) => h.count), 1), fastH = [...actH].sort((a, b) => (a.sum / a.count) - (b.sum / b.count))[0];
+  validEntries.forEach((e) => {
+    const hr = new Date(e.createdAt).getHours();
+    hB[hr].sum += e.ms; hB[hr].count++;
+    if (e.ms < hB[hr].best) hB[hr].best = e.ms;
+  });
+  const actH = hB.filter((h) => h.count > 0);
+  const maxHC = Math.max(...actH.map((h) => h.count), 1);
+  const fastH = [...actH].sort((a, b) => (a.sum / a.count) - (b.sum / b.count))[0];
   const fmtHr = (hr) => hr === 0 ? "12a" : hr < 12 ? `${hr}a` : hr === 12 ? "12p" : `${hr - 12}p`;
-  const hourlyHtml = actH.map((h) => `<div class="tod-col ${fastH && h.hr === fastH.hr ? "best" : ""} chart-tip-target" data-tip="${fmtHr(h.hr)}: ${h.count} solves • ${formatTime(h.sum / h.count, dec)} avg • Best ${formatTime(h.best, dec)}"><span class="tod-time">${h.count}</span><div class="tod-bar-wrap"><div class="tod-bar" style="height:${Math.max(14, Math.round((h.count / maxHC) * 100))}%"></div></div><span class="tod-lbl">${fmtHr(h.hr)}</span></div>`).join("");
+  const hourlyHtml = actH.map((h) => `
+    <div class="tod-col ${fastH && h.hr === fastH.hr ? "best" : ""} chart-tip-target" data-tip="${fmtHr(h.hr)}: ${h.count} solves • ${formatTime(h.sum / h.count, dec)} avg • Best ${formatTime(h.best, dec)}">
+      <span class="tod-time">${h.count}</span>
+      <div class="tod-bar-wrap"><div class="tod-bar" style="height:${Math.max(14, Math.round((h.count / maxHC) * 100))}%"></div></div>
+      <span class="tod-lbl">${fmtHr(h.hr)}</span>
+    </div>
+  `).join("");
 
+  // 4. Daily Pace Matrix
   const dayMap = new Map();
-  validEntries.forEach((e) => { const d = new Date(e.createdAt), k = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`, lbl = d.toLocaleDateString(undefined, { month: "short", day: "numeric" }); if (!dayMap.has(k)) dayMap.set(k, { label: lbl, times: [] }); dayMap.get(k).times.push(e.ms); });
+  validEntries.forEach((e) => {
+    const d = new Date(e.createdAt), k = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`, lbl = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    if (!dayMap.has(k)) dayMap.set(k, { label: lbl, times: [] });
+    dayMap.get(k).times.push(e.ms);
+  });
   const days = [...dayMap.values()].slice(-12), dAvgs = days.map((d) => d.times.reduce((a, b) => a + b, 0) / d.times.length), minDA = Math.min(...dAvgs), maxDA = Math.max(...dAvgs);
-  const paceTilesHtml = days.map((d, idx) => { const avg = dAvgs[idx], norm = maxDA > minDA ? 1 - (avg - minDA) / (maxDA - minDA) : 0.7; return `<div class="pace-tile chart-tip-target" data-tip="${d.label}: ${d.times.length} solves • ${formatTime(avg, dec)} avg • Best ${formatTime(Math.min(...d.times), dec)}"><span class="pace-top">${d.label}</span><strong class="pace-main">${formatTime(avg, 2)}</strong><span class="pace-sub">${d.times.length}x</span><div class="pace-bar" style="width:${Math.round(25 + norm * 75)}%; opacity:${(0.35 + norm * 0.65).toFixed(2)}"></div></div>`; }).join("");
+  const paceTilesHtml = days.map((d, idx) => {
+    const avg = dAvgs[idx], norm = maxDA > minDA ? 1 - (avg - minDA) / (maxDA - minDA) : 0.7;
+    return `<div class="pace-tile chart-tip-target" data-tip="${d.label}: ${d.times.length} solves • ${formatTime(avg, dec)} avg • Best ${formatTime(Math.min(...d.times), dec)}"><span class="pace-top">${d.label}</span><strong class="pace-main">${formatTime(avg, 2)}</strong><span class="pace-sub">${d.times.length}x</span><div class="pace-bar" style="width:${Math.round(25 + norm * 75)}%; opacity:${(0.35 + norm * 0.65).toFixed(2)}"></div></div>`;
+  }).join("");
 
+  // 5. Scatter Plot
   const cSize = valid.length >= 40 ? 10 : valid.length >= 15 ? 5 : 2, chunks = [];
-  for (let i = 0; i + cSize <= valid.length; i += cSize) { const sl = valid.slice(i, i + cSize), cm = sl.reduce((a, b) => a + b, 0) / sl.length, cs = Math.sqrt(sl.reduce((a, t) => a + (t - cm) ** 2, 0) / sl.length); chunks.push({ label: `#${i + 1}–${i + cSize}`, mean: cm, sd: cs }); }
+  for (let i = 0; i + cSize <= valid.length; i += cSize) {
+    const sl = valid.slice(i, i + cSize), cm = sl.reduce((a, b) => a + b, 0) / sl.length, cs = Math.sqrt(sl.reduce((a, t) => a + (t - cm) ** 2, 0) / sl.length);
+    chunks.push({ label: `#${i + 1}–${i + cSize}`, mean: cm, sd: cs });
+  }
   let scatterSvg = `<p class="muted-text">Need ${cSize * 2}+ solves for scatter plot</p>`;
   if (chunks.length >= 2) {
-    const sw = 260, sh = 142, sL = 32, sR = 10, sT = 12, sB = 22, minM = Math.min(...chunks.map((c) => c.mean)), maxM = Math.max(...chunks.map((c) => c.mean)), minS = Math.min(...chunks.map((c) => c.sd)), maxS = Math.max(...chunks.map((c) => c.sd)), spM = Math.max(1, maxM - minM), spS = Math.max(1, maxS - minS);
-    const sx = (m) => sL + ((m - minM) / spM) * (sw - sL - sR), sy = (s) => sh - sB - ((s - minS) / spS) * (sh - sT - sB), avgCM = chunks.reduce((a, c) => a + c.mean, 0) / chunks.length, avgCS = chunks.reduce((a, c) => a + c.sd, 0) / chunks.length;
+    const sw = 260, sh = 142, sL = 32, sR = 10, sT = 12, sB = 22;
+    const minM = Math.min(...chunks.map((c) => c.mean)), maxM = Math.max(...chunks.map((c) => c.mean)), minS = Math.min(...chunks.map((c) => c.sd)), maxS = Math.max(...chunks.map((c) => c.sd));
+    const spM = Math.max(1, maxM - minM), spS = Math.max(1, maxS - minS);
+    const sx = (m) => sL + ((m - minM) / spM) * (sw - sL - sR), sy = (s) => sh - sB - ((s - minS) / spS) * (sh - sT - sB);
+    const avgCM = chunks.reduce((a, c) => a + c.mean, 0) / chunks.length, avgCS = chunks.reduce((a, c) => a + c.sd, 0) / chunks.length;
     const dots = chunks.map((c, idx) => `<circle class="chart-tip-target" cx="${sx(c.mean).toFixed(1)}" cy="${sy(c.sd).toFixed(1)}" r="${idx === chunks.length - 1 ? 4.8 : 3.2}" fill="var(--accent-color)" opacity="${(0.3 + (idx / (chunks.length - 1)) * 0.7).toFixed(2)}" stroke="${idx === chunks.length - 1 ? "#fff" : "none"}" stroke-width="1.2" data-tip="${c.label}: ${formatTime(c.mean, dec)} avg • σ ${formatTime(c.sd, dec)}s" style="cursor:pointer"/>`).join("");
     scatterSvg = `<svg viewBox="0 0 ${sw} ${sh}" width="100%" height="134"><line x1="${sL}" y1="${sy(avgCS).toFixed(1)}" x2="${sw - sR}" y2="${sy(avgCS).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/><line x1="${sx(avgCM).toFixed(1)}" y1="${sT}" x2="${sx(avgCM).toFixed(1)}" y2="${sh - sB}" stroke="var(--border-color)" stroke-dasharray="3 3"/><line x1="${sL}" y1="${sh - sB}" x2="${sw - sR}" y2="${sh - sB}" stroke="var(--border-strong)"/><line x1="${sL}" y1="${sT}" x2="${sL}" y2="${sh - sB}" stroke="var(--border-strong)"/><text x="4" y="${sT + 6}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(maxS, 1)}σ</text><text x="4" y="${sh - sB}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(minS, 1)}σ</text><text x="${sL}" y="${sh - 6}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(minM, 1)}s</text><text x="${sw - sR - 26}" y="${sh - 6}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">${formatTime(maxM, 1)}s</text><text x="${sL + 4}" y="${sT + 8}" fill="var(--accent-color)" opacity="0.65" font-size="7" font-family="monospace">← Fast &amp; Steady</text>${dots}</svg>`;
   }
 
-  const sorted = [...valid].sort((a, b) => a - b), median = sorted[Math.floor(sorted.length / 2)], iqr = sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.75)] - sorted[Math.floor(sorted.length * 0.25)] : null, subCount = valid.filter((t) => t <= settings.goalMs).length;
-  let curSt = 0, bestSt = 0; eventSolves.forEach((s) => { if (getEffectiveMs(s) <= settings.goalMs) { curSt++; if (curSt > bestSt) bestSt = curSt; } else curSt = 0; });
-  const fmt = (v) => (v === null ? "-" : formatTime(v, dec)), mo3 = eventSolves.length >= 3 ? calculateMeanOfSlice(eventSolves.slice(-3)) : null;
+  // 6. Comprehensive Records Table
+  const sorted = [...valid].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  const iqr = sorted.length >= 4 ? sorted[Math.floor(sorted.length * 0.75)] - sorted[Math.floor(sorted.length * 0.25)] : null;
+  const subCount = valid.filter((t) => t <= settings.goalMs).length;
+  let curSt = 0, bestSt = 0;
+  eventSolves.forEach((s) => { if (getEffectiveMs(s) <= settings.goalMs) { curSt++; if (curSt > bestSt) bestSt = curSt; } else curSt = 0; });
+  const fmt = (v) => (v === null ? "-" : formatTime(v, dec));
+  const mo3 = eventSolves.length >= 3 ? calculateMeanOfSlice(eventSolves.slice(-3)) : null;
+
   const rows = [
-    ["Single", formatSolve(eventSolves.slice(-1)[0], dec), fmt(best), `Worst: ${fmt(worst)} • Spread: ${formatTime(worst - best, dec)}`],
-    ["Mo3", fmt(mo3), fmt(getBestRollingAvg(eventSolves, 3, true)), `Median: ${fmt(median)}`],
-    ["Ao5", fmt(calculateTrimmedAverage(eventSolves, 5)), fmt(getBestRollingAvg(eventSolves, 5)), `Sub-Goal: ${Math.round((subCount / valid.length) * 100)}% (${subCount}/${valid.length})`],
-    ["Ao12", fmt(calculateTrimmedAverage(eventSolves, 12)), fmt(getBestRollingAvg(eventSolves, 12)), `Goal Streak: ${bestSt} (cur ${curSt})`],
-    ["Ao25 / Ao50", `${fmt(calculateTrimmedAverage(eventSolves, 25))} / ${fmt(calculateTrimmedAverage(eventSolves, 50))}`, `${fmt(getBestRollingAvg(eventSolves, 25))} / ${fmt(getBestRollingAvg(eventSolves, 50))}`, `Std Dev: ${formatTime(stdDev, dec)}s`],
-    ["Ao100", fmt(calculateTrimmedAverage(eventSolves, 100)), fmt(getBestRollingAvg(eventSolves, 100)), `Consistency: ${consistency.toFixed(1)}% • IQR: ${iqr ? formatTime(iqr, dec) + "s" : "-"}`],
+    ["Single (PB)", formatSolve(eventSolves.slice(-1)[0], dec), fmt(best), `Worst: ${fmt(worst)} • Spread: ${formatTime(worst - best, dec)}`],
+    ["Mean of 3 (Mo3)", fmt(mo3), fmt(getBestRollingAvg(eventSolves, 3, true)), `Median: ${fmt(median)}`],
+    ["Average of 5 (Ao5)", fmt(calculateTrimmedAverage(eventSolves, 5)), fmt(getBestRollingAvg(eventSolves, 5)), `Sub-${formatTime(settings.goalMs, 2)}: ${Math.round((subCount / valid.length) * 100)}% (${subCount}/${valid.length})`],
+    ["Average of 12 (Ao12)", fmt(calculateTrimmedAverage(eventSolves, 12)), fmt(getBestRollingAvg(eventSolves, 12)), `Goal Streak: ${bestSt} solves (current ${curSt})`],
+    ["Ao25 / Ao50", `${fmt(calculateTrimmedAverage(eventSolves, 25))} / ${fmt(calculateTrimmedAverage(eventSolves, 50))}`, `${fmt(getBestRollingAvg(eventSolves, 25))} / ${fmt(getBestRollingAvg(eventSolves, 50))}`, `Std Dev (σ): ${formatTime(stdDev, dec)}s`],
+    ["Average of 100 (Ao100)", fmt(calculateTrimmedAverage(eventSolves, 100)), fmt(getBestRollingAvg(eventSolves, 100)), `Consistency: ${consistency.toFixed(1)}% • IQR: ${iqr ? formatTime(iqr, dec) + "s" : "-"}`],
+    ["Session Overall", fmt(mean), fmt(best), `Total Time: ${Math.floor(valid.reduce((a, b) => a + b, 0) / 60000)}m • Valid: ${valid.length}`],
   ];
 
-  advStatsBody.innerHTML = `
+  const chartsHtml = `
     <div class="charts-grid-2">
       <div class="chart-card"><div class="chart-title-row"><span>Time Brackets</span><small>${valid.length} valid</small></div><div class="bracket-list">${bracketsHtml}</div></div>
-      <div class="chart-card"><div class="chart-title-row"><span>Improvement Trajectory</span><small>${slopeText}</small></div><svg viewBox="0 0 ${trajW} ${trajH}" width="100%" height="134" style="color:var(--accent-color)"><line x1="${tPadL}" y1="${ty(tMax).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMax).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/><line x1="${tPadL}" y1="${ty(tMid).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMid).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/><line x1="${tPadL}" y1="${ty(tMin).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMin).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/><polyline fill="none" stroke="currentColor" stroke-opacity="0.35" stroke-dasharray="4 3" stroke-width="1.4" points="${pbPts.map((v, i) => `${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ")}" /><polyline fill="none" stroke="currentColor" stroke-width="2" points="${rollPts.map((v, i) => `${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ")}" /><text x="2" y="${ty(tMax) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMax, 1)}</text><text x="2" y="${ty(tMid) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMid, 1)}</text><text x="2" y="${ty(tMin) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMin, 1)}</text><text x="${tPadL}" y="${trajH - 4}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">#${validEntries[0].idx}</text><text x="${trajW - tPadR - 24}" y="${trajH - 4}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">#${validEntries[n - 1].idx}</text>${trajHits.join("")}</svg><small class="muted-text" style="font-size:0.7rem;">Solid = Rolling Ao${rWin} • Dashed = Single PB Staircase</small></div>
+      <div class="chart-card"><div class="chart-title-row"><span>Improvement Trajectory</span><small>${slopeText}</small></div><svg viewBox="0 0 ${trajW} ${trajH}" width="100%" height="134" style="color:var(--accent-color)"><line x1="${tPadL}" y1="${ty(tMax).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMax).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/><line x1="${tPadL}" y1="${ty(tMid).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMid).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/><line x1="${tPadL}" y1="${ty(tMin).toFixed(1)}" x2="${trajW - tPadR}" y2="${ty(tMin).toFixed(1)}" stroke="var(--border-color)" stroke-dasharray="3 3"/><polyline fill="none" stroke="currentColor" stroke-opacity="0.35" stroke-dasharray="4 3" stroke-width="1.4" points="${pbPts.map((v, i) => `${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ")}" /><polyline fill="none" stroke="currentColor" stroke-width="2" points="${rollPts.map((v, i) => `${tx(i).toFixed(1)},${ty(v).toFixed(1)}`).join(" ")}" /><text x="2" y="${ty(tMax) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMax, 1)}</text><text x="2" y="${ty(tMid) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMid, 1)}</text><text x="2" y="${ty(tMin) + 3}" fill="var(--text-muted)" font-size="8" font-family="monospace">${formatTime(tMin, 1)}</text><text x="${tPadL}" y="${trajH - 4}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">#${validEntries[0].idx}</text><text x="${trajW - tPadR - 24}" y="${trajH - 4}" fill="var(--text-muted)" font-size="7.5" font-family="monospace">#${validEntries[n - 1].idx}</text></svg><small class="muted-text" style="font-size:0.7rem;">Solid = Rolling Ao${rWin} • Dashed = Single PB Staircase</small></div>
     </div>
     <div class="charts-grid-3">
       <div class="chart-card"><div class="chart-title-row"><span>Hourly Volume &amp; Speed</span><small>Fastest: ${fastH ? `${fmtHr(fastH.hr)} (${formatTime(fastH.sum / fastH.count, 2)})` : "-"}</small></div><div class="tod-grid" style="grid-template-columns: repeat(${actH.length}, minmax(24px, 1fr))">${hourlyHtml}</div></div>
       <div class="chart-card"><div class="chart-title-row"><span>Daily Pace Matrix</span><small>Last 12 active days</small></div><div class="pace-grid">${paceTilesHtml}</div></div>
       <div class="chart-card"><div class="chart-title-row"><span>Speed vs Consistency</span><small>${cSize}-solve blocks</small></div>${scatterSvg}</div>
     </div>
-    <div class="records-table-wrap"><table class="records-table"><thead><tr><th>Metric</th><th>Current</th><th>Best Ever</th><th>Details</th></tr></thead><tbody>${rows.map(([m, c, b, note]) => `<tr><td>${m}</td><td class="num">${c}</td><td class="num">${b}</td><td style="color:var(--text-secondary)">${note}</td></tr>`).join("")}</tbody></table></div>
   `;
 
+  const tableHtml = `
+    <div class="records-table-wrap">
+      <div class="panel-header" style="padding:0.75rem 1rem; border-bottom:1px solid var(--border-color);">
+        <span>Session Records &amp; Rolling Averages</span>
+        <span class="muted-text">${valid.length} solves calculated</span>
+      </div>
+      <table class="records-table">
+        <thead><tr><th>Metric</th><th>Current</th><th>Best Ever</th><th>Details</th></tr></thead>
+        <tbody>${rows.map(([m, c, b, note]) => `<tr><td><strong>${m}</strong></td><td class="num">${c}</td><td class="num">${b}</td><td style="color:var(--text-secondary)">${note}</td></tr>`).join("")}</tbody>
+      </table>
+    </div>
+  `;
+
+  if (advStatsViewMode === "table") {
+    advStatsBody.innerHTML = tableHtml;
+  } else if (advStatsViewMode === "charts") {
+    advStatsBody.innerHTML = chartsHtml;
+  } else {
+    advStatsBody.innerHTML = chartsHtml + tableHtml;
+  }
+
+  // Hook view tabs (All / Records Table / Charts)
+  const tabWrap = $("adv-view-tabs");
+  if (tabWrap) {
+    tabWrap.querySelectorAll(".seg-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.sview === advStatsViewMode);
+      btn.onclick = () => {
+        advStatsViewMode = btn.dataset.sview;
+        renderAdvancedStats(eventSolves);
+      };
+    });
+  }
+
+  // Hook tooltips
   advStatsBody.querySelectorAll(".chart-tip-target").forEach((el) => {
     el.addEventListener("pointerenter", (e) => showTooltip(el.dataset.tip, e.clientX, e.clientY));
     el.addEventListener("pointermove", (e) => showTooltip(el.dataset.tip, e.clientX, e.clientY));

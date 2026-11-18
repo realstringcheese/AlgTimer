@@ -154,7 +154,15 @@
 
         <div id="adv-stats-drawer" class="adv-stats-drawer hidden">
           <div class="adv-stats-header">
-            <div><strong>Advanced Session Stats</strong><span id="adv-stats-subtitle" class="muted-text"></span></div>
+            <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+              <strong>Advanced Session Stats</strong>
+              <span id="adv-stats-subtitle" class="muted-text"></span>
+              <div id="adv-view-tabs" class="segmented" style="margin-left:0.4rem;">
+                <button class="seg-btn active" data-sview="all" type="button">All</button>
+                <button class="seg-btn" data-sview="table" type="button">Records Table</button>
+                <button class="seg-btn" data-sview="charts" type="button">Charts</button>
+              </div>
+            </div>
             <button id="close-adv-stats-btn" class="btn-icon" type="button" aria-label="Collapse Stats">✕</button>
           </div>
           <div id="adv-stats-body" class="adv-stats-body"></div>
