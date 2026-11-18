@@ -278,6 +278,35 @@ function importWithTimeout(url, ms = 9000) {
   ]);
 }
 
+let scramblerLoadPromise = null;
+
+function importWithTimeout(url, ms = 8000) {
+  return Promise.race([
+    import(url),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Network timeout")), ms)),
+  ]);
+}
+
+function ensureScramblerLoaded() {
+  if (randomScrambleForEvent) return Promise.resolve(true);
+  if (!scramblerLoadPromise) {
+    scramblerLoadPromise = importWithTimeout("https://cdn.cubing.net/v0/js/cubing/scramble", 8000)
+      .then((mod) => {
+        randomScrambleForEvent = mod.randomScrambleForEvent;
+        if (timerState === "idle" && scrambleStatusEl.textContent.includes("Offline")) {
+          loadNextScramble(settings.event);
+        }
+        return true;
+      })
+      .catch((err) => {
+        console.warn("WCA scrambler unreachable:", err);
+        scramblerLoadPromise = null;
+        return false;
+      });
+  }
+  return scramblerLoadPromise;
+}
+
 async function init() {
   uploadedBgDataUrl = await loadUploadedBg();
   eventSelect.value = settings.event;
@@ -288,19 +317,22 @@ async function init() {
   syncMethodViews();
   renderAll();
 
+  // Show an instant scramble immediately at 0ms
+  currentScramble = localFallbackScramble(settings.event);
+  scrambleTextEl.textContent = currentScramble;
+  scrambleStatusEl.textContent = "Connecting WCA...";
   previewModeBadge.textContent = "Loading...";
 
-  // Load scrambler and 3D cube in parallel so slow Wi-Fi doesn't block scrambles
-  importWithTimeout("https://cdn.cubing.net/v0/js/cubing/scramble", 9000)
-    .then((mod) => {
-      randomScrambleForEvent = mod.randomScrambleForEvent;
-      return loadNextScramble(settings.event);
-    })
-    .catch((err) => {
-      console.warn("WCA scrambler timeout/offline, using fallback:", err);
-      return loadNextScramble(settings.event);
-    });
+  // Upgrade to official WCA scrambles in the background
+  ensureScramblerLoaded().then((ok) => {
+    if (ok) {
+      if (timerState === "idle") loadNextScramble(settings.event);
+    } else {
+      scrambleStatusEl.textContent = "Offline fallback (Wi-Fi)";
+    }
+  });
 
+  // Load 3D/2D cube preview in parallel
   importWithTimeout("https://cdn.cubing.net/v0/js/cubing/twisty", 12000)
     .then(() => updateScramblePreview())
     .catch((err) => {
@@ -660,14 +692,33 @@ function localFallbackScramble(eventId) {
   return genMoves(["U", "D", "R", "L", "F", "B"], 20);
 }
 
+function localFallbackScramble(eventId) {
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const mods = ["", "'", "2"];
+  const genMoves = (faces, len) => {
+    const out = [];
+    let last = "", prev2 = "";
+    for (let i = 0; i < len; i++) {
+      let f;
+      do { f = pick(faces); } while (f === last || (f[0] === last[0] && f === prev2));
+      prev2 = last; last = f;
+      out.push(f + pick(mods));
+    }
+    return out.join(" ");
+  };
+  if (eventId === "222") return genMoves(["U", "R", "F"], 9);
+  if (eventId === "444") return genMoves(["U", "D", "R", "L", "F", "B", "Uw", "Rw", "Fw"], 40);
+  if (eventId === "555") return genMoves(["U", "D", "R", "L", "F", "B", "Uw", "Dw", "Rw", "Lw", "Fw", "Bw"], 60);
+  if (eventId === "666" || eventId === "777") return genMoves(["U", "D", "R", "L", "F", "B", "Uw", "Dw", "Rw", "Lw", "Fw", "Bw", "3Uw", "3Rw", "3Fw"], 80);
+  if (eventId === "pyram") return genMoves(["U", "L", "R", "B"], 10);
+  if (eventId === "skewb") return genMoves(["U", "L", "R", "B"], 9);
+  return genMoves(["U", "D", "R", "L", "F", "B"], 20);
+}
+
 async function generateScramble(eventId) {
   if (!randomScrambleForEvent) {
-    try {
-      const mod = await importWithTimeout("https://cdn.cubing.net/v0/js/cubing/scramble", 4000);
-      randomScrambleForEvent = mod.randomScrambleForEvent;
-    } catch {
-      return { text: localFallbackScramble(eventId), offline: true };
-    }
+    ensureScramblerLoaded();
+    return { text: localFallbackScramble(eventId), offline: true };
   }
   const alg = await randomScrambleForEvent(eventId);
   return { text: alg.toString(), offline: false };
@@ -702,7 +753,10 @@ async function loadNextScramble(eventId) {
 async function prefetchScramble(eventId) {
   try {
     const next = await generateScramble(eventId);
-    if (eventId === settings.event) { prefetchedScramble = next; prefetchedEvent = eventId; }
+    if (eventId === settings.event && !next.offline) {
+      prefetchedScramble = next;
+      prefetchedEvent = eventId;
+    }
   } catch {}
 }
 
