@@ -1,5 +1,5 @@
 import { EVENT_TO_PUZZLE, CSTIMER_EVENT_MAP, PREMADE_SCENES, QUICK_MOODS, COLOR_PRESETS, SCENE_PRESETS } from "./data.js";
-import { initTrainer, syncMethodViews, onTrainerTabVisible, renderImprovementView, handleImprovementKeyDown, handleImprovementKeyUp, handleImprovementPointerUp } from "./trainer.js";
+import { initTrainer, syncMethodViews, onTrainerTabVisible, renderImprovementView, handleImprovementKeyDown, handleImprovementKeyUp, handleImprovementPointerUp, formatTime } from "./trainer.js";
 import { initCloud, signInGoogle, signOutGoogle, scheduleCloudPush } from "./cloud.js";
 
 // === SECTION A1: STORAGE KEYS & DEFAULTS ===
