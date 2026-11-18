@@ -217,6 +217,12 @@ function stopAlgPlayback() {
   if (activeAlgTwisty) { try { activeAlgTwisty.pause?.(); } catch {} }
 }
 
+function formatTime(ms, decimals = 2) {
+  if (!ms || isNaN(ms)) return "0.00";
+  const seconds = ms / 1000;
+  return seconds.toFixed(decimals);
+}
+
 function renderAlgSimulatorStage() {
   if (!currentAlgItem) return;
   const host = $("alg-sim-player"), modeBtn = $("alg-view-mode-btn"), speed = Number($("alg-speed-select")?.value || 1);
