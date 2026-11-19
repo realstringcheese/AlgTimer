@@ -1,39 +1,4 @@
-import { METHOD_GUIDES, METHOD_ALGS } from "./data.js";
-
-export const PLL_CASES = [
-  { id: "pll-aa", name: "Aa-Perm", cat: "PLL", stickering: "PLL", alg: "R' F R' B2 R F' R' B2 R2", tip: "Headlights in back, 2x2 block in front-left." },
-  { id: "pll-ab", name: "Ab-Perm", cat: "PLL", stickering: "PLL", alg: "R2 B2 R F R' B2 R F' R", tip: "Headlights on left, 2x2 block in front-right." },
-  { id: "pll-e", name: "E-Perm", cat: "PLL", stickering: "PLL", alg: "R B' R' F R B R' F' R B R' F R B' R' F'", tip: "Adjacent corners swap." },
-  { id: "pll-f", name: "F-Perm", cat: "PLL", stickering: "PLL", alg: "R' U' F' R U R' U' R' F R2 U' R' U' R U R' U R", tip: "Full 3-sticker bar on left." },
-  { id: "pll-ga", name: "Ga-Perm", cat: "PLL", stickering: "PLL", alg: "R2 U R' U R' U' R U' R2 D U' R' U R D'", tip: "Headlights on left, 2-block front-right." },
-  { id: "pll-gb", name: "Gb-Perm", cat: "PLL", stickering: "PLL", alg: "R' U' R U D' R2 U R' U R U' R U' R2 D", tip: "Headlights on left, 2-block in back." },
-  { id: "pll-gc", name: "Gc-Perm", cat: "PLL", stickering: "PLL", alg: "R2 U' R U' R U R' U R2 D' U R U' R' D", tip: "Headlights on left, 2-block back-right." },
-  { id: "pll-gd", name: "Gd-Perm", cat: "PLL", stickering: "PLL", alg: "R U R' U' D R2 U' R U' R' U R' U R2 D'", tip: "Headlights on left, 2-block in front." },
-  { id: "pll-h", name: "H-Perm", cat: "PLL", stickering: "PLL", alg: "M2 U M2 U2 M2 U M2", tip: "Opposite edge swap across 4 faces." },
-  { id: "pll-ja", name: "Ja-Perm", cat: "PLL", stickering: "PLL", alg: "L' U' L F L' U' L U L F' L2 U L U", tip: "Full bar on left, 2-block front-left." },
-  { id: "pll-jb", name: "Jb-Perm", cat: "PLL", stickering: "PLL", alg: "R U R' F' R U R' U' R' F R2 U' R' U'", tip: "Full bar on left, 2-block front-right." },
-  { id: "pll-na", name: "Na-Perm", cat: "PLL", stickering: "PLL", alg: "R U R' U R U R' F' R U R' U' R' F R2 U' R' U2 R U' R'", tip: "Four 2-sticker blocks CW." },
-  { id: "pll-nb", name: "Nb-Perm", cat: "PLL", stickering: "PLL", alg: "R' U R U' R' F' U' F R U R' F R' F' R U' R", tip: "Four 2-sticker blocks CCW." },
-  { id: "pll-ra", name: "Ra-Perm", cat: "PLL", stickering: "PLL", alg: "R U' R' U' R U R D R' U' R D' R' U2 R'", tip: "Headlights on left, 2-block in front." },
-  { id: "pll-rb", name: "Rb-Perm", cat: "PLL", stickering: "PLL", alg: "R' U2 R U2 R' F R U R' U' R' F' R2", tip: "Headlights in front, 2-block on right." },
-  { id: "pll-t", name: "T-Perm", cat: "PLL", stickering: "PLL", alg: "R U R' U' R' F R2 U' R' U' R U R' F'", tip: "Headlights on left + bars on top/bottom." },
-  { id: "pll-ua", name: "Ua-Perm", cat: "PLL", stickering: "PLL", alg: "R U' R U R U R U' R' U' R2", tip: "Solved bar in back; edges cycle CCW." },
-  { id: "pll-ub", name: "Ub-Perm", cat: "PLL", stickering: "PLL", alg: "R2 U R U R' U' R' U' R' U R'", tip: "Solved bar in back; edges cycle CW." },
-  { id: "pll-v", name: "V-Perm", cat: "PLL", stickering: "PLL", alg: "R' U R' U' R D' R' D R' U D' R2 U' R2 D R2", tip: "2x2 block in front-left." },
-  { id: "pll-y", name: "Y-Perm", cat: "PLL", stickering: "PLL", alg: "F R U' R' U' R U R' F' R U R' U' R' F R F'", tip: "Diagonal corner swap." },
-  { id: "pll-z", name: "Z-Perm", cat: "PLL", stickering: "PLL", alg: "M' U M2 U M2 U M' U2 M2", tip: "Adjacent 2-edge pair swaps." },
-];
-
-const OLL_CASES_LIST = [
-  { id: "oll-27", name: "OLL 27 (Sune)", cat: "OLL", stickering: "OLL", alg: "R U R' U R U2 R'", tip: "Top cross + 1 corner." },
-  { id: "oll-26", name: "OLL 26 (Anti-Sune)", cat: "OLL", stickering: "OLL", alg: "R U2 R' U' R U' R'", tip: "Top cross + 1 corner." },
-  { id: "oll-21", name: "OLL 21 (H)", cat: "OLL", stickering: "OLL", alg: "R U R' U R U' R' U R U2 R'", tip: "Cross + headlights front/back." },
-  { id: "oll-22", name: "OLL 22 (Pi)", cat: "OLL", stickering: "OLL", alg: "R U2 R2 U' R2 U' R2 U2 R", tip: "Cross + headlights left/right." },
-  { id: "oll-23", name: "OLL 23 (Headlights)", cat: "OLL", stickering: "OLL", alg: "R2 D R' U2 R D' R' U2 R'", tip: "Cross + headlights front." },
-  { id: "oll-45", name: "OLL 45 (T-Line)", cat: "OLL", stickering: "OLL", alg: "F R U R' U' F'", tip: "Horizontal line + headlights left." },
-  { id: "oll-33", name: "OLL 33 (T-Key)", cat: "OLL", stickering: "OLL", alg: "R U R' U' R' F R F'", tip: "T-shape with 2 blocks on right." },
-  { id: "oll-44", name: "OLL 44 (P-Shape)", cat: "OLL", stickering: "OLL", alg: "f R U R' U' f'", tip: "2x3 block on left + headlights right." },
-];
+import { METHOD_GUIDES, METHOD_ALGS, PLL_CASES, FULL_OLL_ALGS } from "./data.js";
 
 const STORAGE_LEARNED_KEY = "algtimer_learned_v1";
 const STORAGE_ALG_REPS_KEY = "algtimer_alg_reps_v1";
@@ -67,6 +32,9 @@ let drillHoldTimeoutId = null;
 let drillStartTime = 0;
 let drillRafId = null;
 
+const $ = (id) => document.getElementById(id);
+
+// === CUBE STATE ENGINE ===
 function createSolvedCube() { return CUBE_FACES.flatMap((f) => Array(9).fill(f)); }
 function rotFaceCW(c, f) {
   const o = CUBE_OFF[f], s = c.slice(o, o + 9);
@@ -163,6 +131,7 @@ function renderAlgCaseVisual(item) {
   return renderIsoCubeSVG(cube, 23, 100, 86, "0 0 200 172");
 }
 
+// === OLL & PLL F2L-SOLVED SCRAMBLE GENERATOR ===
 const randItem = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const AUFS = ["", "U", "U'", "U2"];
 
@@ -172,15 +141,17 @@ function generateLLCase(mode) {
     const pll = randItem(PLL_CASES);
     return { caseItem: pll, scramble: simplifyMoves([postU, ...invertAlgTokens(pll.alg), preU]).join(" "), stickering: "PLL" };
   }
-  const oll = randItem(OLL_CASES_LIST), pll = randItem(PLL_CASES), midU = randItem(AUFS);
+  const oll = randItem(FULL_OLL_ALGS), pll = randItem(PLL_CASES), midU = randItem(AUFS);
   const toks = simplifyMoves([postU, ...invertAlgTokens(pll.alg), midU, ...invertAlgTokens(oll.alg), preU]);
   if (mode === "oll") return { caseItem: oll, scramble: toks.join(" "), stickering: "OLL" };
   return { caseItem: { id: `${oll.id}+${pll.id}`, name: `${oll.name} + ${pll.name}`, cat: "LL", stickering: "OLL", alg: `${oll.alg} | ${pll.alg}` }, scramble: toks.join(" "), stickering: "OLL" };
 }
 
+// === ALG LEARNER & METHOD GUIDES ===
 export function syncMethodViews() {
   const s = ctx.getSettings(), m = METHOD_GUIDES[s.profileMethod] ? s.profileMethod : "CFOP";
-  $("guide-nav-tab").textContent = `${m} Guide`; $("alg-page-title").textContent = `Alg Learner (${m})`;
+  $("guide-nav-tab").textContent = `${m} Guide`;
+  $("alg-page-title").textContent = `Alg Learner (${m})`;
   const algs = METHOD_ALGS[m] || METHOD_ALGS.CFOP, cats = ["ALL", ...new Set(algs.map((a) => a.cat))];
   activeAlgFilter = "ALL"; algSearchQuery = ""; if ($("alg-search-input")) $("alg-search-input").value = "";
   selectedAlgId = algs[0]?.id;
@@ -193,7 +164,7 @@ export function syncMethodViews() {
 function renderAlgs() {
   const m = METHOD_ALGS[ctx.getSettings().profileMethod] ? ctx.getSettings().profileMethod : "CFOP";
   const list = METHOD_ALGS[m], q = algSearchQuery.trim().toLowerCase();
-  const filtered = list.filter((a) => (activeAlgFilter === "ALL" || a.cat === activeAlgFilter) && (!q || a.name.toLowerCase().includes(q) || a.cat.toLowerCase().includes(q) || a.alg.toLowerCase().includes(q)));
+  const filtered = list.filter((a) => (activeAlgFilter === "ALL" || a.cat === activeAlgFilter) && (!q || a.name.toLowerCase().includes(q) || a.cat.toLowerCase().includes(q) || a.alg.toLowerCase().includes(q) || (a.tip || "").toLowerCase().includes(q)));
   const grid = $("alg-grid"); grid.innerHTML = "";
   if (!filtered.length) { grid.innerHTML = `<p class="muted-text">No algorithms match "${algSearchQuery}".</p>`; return; }
 
@@ -208,19 +179,14 @@ function renderAlgs() {
     });
     grid.appendChild(card);
   });
-  const cur = list.find((a) => a.id === selectedAlgId) || filtered[0]; if (cur) loadAlgSimulator(cur);
+  const cur = list.find((a) => a.id === selectedAlgId) || filtered[0];
+  if (cur) loadAlgSimulator(cur);
 }
 
 function stopAlgPlayback() {
   clearInterval(algPlayTimer); algPlayTimer = null; algIsPlaying = false;
   if ($("alg-play-btn")) $("alg-play-btn").textContent = "▶ Play";
   if (activeAlgTwisty) { try { activeAlgTwisty.pause?.(); } catch {} }
-}
-
-function formatTime(ms, decimals = 2) {
-  if (!ms || isNaN(ms)) return "0.00";
-  const seconds = ms / 1000;
-  return seconds.toFixed(decimals);
 }
 
 function renderAlgSimulatorStage() {
@@ -287,7 +253,7 @@ function loadNewLLCase() {
   $("drill-new-case-btn").classList.remove("hidden");
   $("drill-reveal-btn").classList.remove("hidden");
   $("drill-scramble-text").textContent = llSetupScramble;
-  $("drill-mode-note").textContent = "Scramble a solved cube (F2L solved). Solve the case to test your speed!";
+  $("drill-mode-note").textContent = "Scramble a solved cube (F2L stays solved). Solve to reveal & log time!";
   updateLLCaseRevealUI(); renderPracticeAlgStats();
 }
 
@@ -303,7 +269,7 @@ function updateLLCaseRevealUI() {
     $("drill-reveal-btn").textContent = "Hide Case";
   } else {
     $("drill-alg-name").textContent = `Hidden ${drillMode.toUpperCase()} Case`; $("drill-alg-cat").textContent = drillMode.toUpperCase();
-    $("drill-alg-moves").textContent = "Solve on your physical cube to reveal case & alg (or click Reveal)";
+    $("drill-alg-moves").textContent = "Solve on your cube to reveal case & alg (or click Reveal Case)";
     $("drill-reveal-btn").textContent = "Reveal Case";
   }
 }
@@ -358,9 +324,16 @@ function stopDrillTimer() {
     if (!algReps[practiceAlgItem.id]) algReps[practiceAlgItem.id] = [];
     algReps[practiceAlgItem.id].push({ ms: elapsed, createdAt: Date.now() });
     localStorage.setItem(STORAGE_ALG_REPS_KEY, JSON.stringify(algReps));
+    ctx.onRepsChanged?.();
     if (drillMode !== "alg") { llRevealed = true; updateLLCaseRevealUI(); ctx.showToast(`${practiceAlgItem.name}: ${ctx.formatTime(elapsed, 2)}s`); setTimeout(() => { if (drillTimerState === "idle" || drillTimerState === "stopping") loadNewLLCase(); }, 1800); }
     renderPracticeAlgStats(); renderImprovementView();
   }
+}
+
+export function reloadTrainerReps() {
+  try { algReps = JSON.parse(localStorage.getItem(STORAGE_ALG_REPS_KEY)) || {}; } catch { algReps = {}; }
+  renderPracticeAlgStats();
+  renderImprovementView();
 }
 
 export function renderImprovementView() {
@@ -369,7 +342,7 @@ export function renderImprovementView() {
   renderMacroProgressionGraph(valid);
 
   const m = METHOD_ALGS[settings.profileMethod] ? settings.profileMethod : "CFOP";
-  const allCases = [...METHOD_ALGS[m], ...PLL_CASES].filter((v, i, a) => a.findIndex((x) => x.id === v.id) === i);
+  const allCases = [...METHOD_ALGS[m], ...PLL_CASES, ...FULL_OLL_ALGS].filter((v, i, a) => a.findIndex((x) => x.id === v.id) === i);
   const practicedIds = Object.keys(algReps).filter((id) => (algReps[id] || []).length > 0);
   $("improve-algs-count").textContent = `${practicedIds.length} cases`;
 
@@ -475,7 +448,7 @@ export function initTrainer(context) {
       } catch {}
     }
     if (algStepIndex >= toks.length) algStepIndex = 0;
-    algIsPlaying = true; playBtn.textContent = "▶ Play"; renderAlgSimulatorStage();
+    algIsPlaying = true; playBtn.textContent = "⏸ Pause"; renderAlgSimulatorStage();
     algPlayTimer = setInterval(() => { if (algStepIndex < toks.length) { algStepIndex++; renderAlgSimulatorStage(); } else stopAlgPlayback(); }, Math.round(550 / speed));
   });
   $("alg-reset-btn")?.addEventListener("click", () => { stopAlgPlayback(); algStepIndex = 0; renderAlgSimulatorStage(); });
@@ -503,6 +476,7 @@ export function initTrainer(context) {
   $("drill-clear-history-btn").addEventListener("click", () => {
     if (!practiceAlgItem || !confirm(`Clear reps for ${practiceAlgItem.name}?`)) return;
     delete algReps[practiceAlgItem.id]; localStorage.setItem(STORAGE_ALG_REPS_KEY, JSON.stringify(algReps));
+    ctx.onRepsChanged?.();
     renderPracticeAlgStats(); renderImprovementView();
   });
 }

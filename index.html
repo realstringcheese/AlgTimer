@@ -151,23 +151,24 @@
             <span id="adv-stats-teaser" class="muted-text"></span>
           </button>
         </div>
-
-        <div id="adv-stats-drawer" class="adv-stats-drawer hidden">
-          <div class="adv-stats-header">
-            <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
-              <strong>Advanced Session Stats</strong>
-              <span id="adv-stats-subtitle" class="muted-text"></span>
-              <div id="adv-view-tabs" class="segmented" style="margin-left:0.4rem;">
-                <button class="seg-btn active" data-sview="all" type="button">All</button>
-                <button class="seg-btn" data-sview="table" type="button">Records Table</button>
-                <button class="seg-btn" data-sview="charts" type="button">Charts</button>
-              </div>
-            </div>
-            <button id="close-adv-stats-btn" class="btn-icon" type="button" aria-label="Collapse Stats">✕</button>
-          </div>
-          <div id="adv-stats-body" class="adv-stats-body"></div>
-        </div>
       </section>
+
+      <!-- Isolated outside #timer-zone so trackpad scrolling always works -->
+      <div id="adv-stats-drawer" class="adv-stats-drawer hidden">
+        <div class="adv-stats-header">
+          <div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+            <strong>Advanced Session Stats</strong>
+            <span id="adv-stats-subtitle" class="muted-text"></span>
+            <div id="adv-view-tabs" class="segmented" style="margin-left:0.4rem;">
+              <button class="seg-btn active" data-sview="all" type="button">All</button>
+              <button class="seg-btn" data-sview="table" type="button">Records Table</button>
+              <button class="seg-btn" data-sview="charts" type="button">Charts</button>
+            </div>
+          </div>
+          <button id="close-adv-stats-btn" class="btn-icon" type="button" aria-label="Collapse Stats">✕</button>
+        </div>
+        <div id="adv-stats-body" class="adv-stats-body"></div>
+      </div>
 
       <aside class="right-sidebar">
         <section class="stats-grid" aria-label="Session Statistics">
@@ -248,7 +249,6 @@
           </div>
         </div>
 
-        <!-- Big 10-15 Segment All-Time Progression Graph -->
         <div class="chart-card" style="padding:1.1rem 1.3rem;">
           <div class="chart-title-row">
             <div><span style="font-size:0.82rem;">All-Time Solves Macro Progression</span><small id="macro-slope-note" style="margin-left:0.55rem;"></small></div>
@@ -257,7 +257,6 @@
           <div id="macro-graph-wrap" class="macro-graph-wrap"></div>
         </div>
 
-        <!-- Overall Summary -->
         <div class="improve-summary-grid">
           <div class="stat-card"><span class="stat-label">Overall Alg Gain</span><span id="improve-overall-gain" class="stat-value" style="color:var(--accent-color);">0.0%</span></div>
           <div class="stat-card"><span class="stat-label">Cases Practiced</span><span id="improve-algs-count" class="stat-value">0</span></div>
@@ -265,7 +264,6 @@
           <div class="stat-card"><span class="stat-label">Avg Drill Time</span><span id="improve-avg-time" class="stat-value">-</span></div>
         </div>
 
-        <!-- Drill & OLL/PLL Scramble Station -->
         <div class="drill-layout">
           <div class="drill-stage">
             <div class="panel-header">
@@ -309,7 +307,6 @@
           </div>
         </div>
 
-        <!-- Leaderboard -->
         <div class="records-table-wrap">
           <div class="panel-header" style="padding:0.75rem 1rem; border-bottom:1px solid var(--border-color);">
             <span>Algorithm Speed Leaderboard (Click any row to drill)</span>
