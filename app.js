@@ -173,6 +173,10 @@ async function init() {
           applySettingsToUI(); syncMethodViews();
         }
         renderAll(); pushAllToCloud();
+        if (info.cloudData.algStatus && !localStorage.getItem("algtimer_alg_status_v1")) {
+          localStorage.setItem("algtimer_alg_status_v1", JSON.stringify(info.cloudData.algStatus));
+          reloadTrainerReps();
+        }
       }
     } else {
       greetedUid = null;
