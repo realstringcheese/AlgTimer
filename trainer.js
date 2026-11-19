@@ -1,6 +1,7 @@
 import { METHOD_GUIDES, METHOD_ALGS, PLL_CASES, FULL_OLL_ALGS } from "./data.js";
 
 const STORAGE_LEARNED_KEY = "algtimer_learned_v1";
+const STORAGE_STATUS_KEY = "algtimer_alg_status_v1";
 const STORAGE_ALG_REPS_KEY = "algtimer_alg_reps_v1";
 
 const CUBE_FACES = ["U", "R", "F", "D", "L", "B"];
@@ -8,10 +9,11 @@ const CUBE_OFF = { U: 0, R: 9, F: 18, D: 27, L: 36, B: 45 };
 const STICKER_HEX = { U: "#facc15", R: "#ef4444", F: "#22c55e", D: "#f8fafc", L: "#f97316", B: "#3b82f6" };
 
 let ctx = null;
-let learnedAlgs = [];
+let algStatus = {}; // { [algId]: "red" | "yellow" | "green" }
 let algReps = {};
 
 let activeAlgFilter = "ALL";
+let activeStatusFilter = "all";
 let selectedAlgId = null;
 let selectedStageId = null;
 let algSearchQuery = "";
@@ -23,6 +25,7 @@ let activeAlgTwisty = null;
 let currentAlgItem = null;
 
 let drillMode = "alg"; // "alg" | "oll" | "pll" | "ll"
+let drillPool = "all"; // "all" | "red-yellow" | "yellow" | "red"
 let practiceAlgItem = null;
 let llSetupScramble = "";
 let llRevealed = false;
@@ -33,6 +36,26 @@ let drillStartTime = 0;
 let drillRafId = null;
 
 const $ = (id) => document.getElementById(id);
+
+function getAlgStatus(id) {
+  return algStatus[id] || "red";
+}
+
+function loadAlgStatusStorage() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_STATUS_KEY));
+    if (saved && typeof saved === "object" && !Array.isArray(saved)) {
+      algStatus = saved;
+      return;
+    }
+  } catch {}
+  // Migrate any older "learned" array into green status
+  algStatus = {};
+  try {
+    const old = JSON.parse(localStorage.getItem(STORAGE_LEARNED_KEY)) || [];
+    if (Array.isArray(old)) old.forEach((id) => { algStatus[id] = "green"; });
+  } catch {}
+}
 
 // === CUBE STATE ENGINE ===
 function createSolvedCube() { return CUBE_FACES.flatMap((f) => Array(9).fill(f)); }
@@ -131,17 +154,34 @@ function renderAlgCaseVisual(item) {
   return renderIsoCubeSVG(cube, 23, 100, 86, "0 0 200 172");
 }
 
-// === OLL & PLL F2L-SOLVED SCRAMBLE GENERATOR ===
+// === OLL & PLL F2L-SOLVED SCRAMBLE GENERATOR (With Pool Filter) ===
 const randItem = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const AUFS = ["", "U", "U'", "U2"];
+
+function filterByPool(list, label) {
+  if (drillPool === "all") return list;
+  const matched = list.filter((item) => {
+    const st = getAlgStatus(item.id);
+    if (drillPool === "red-yellow") return st === "red" || st === "yellow";
+    return st === drillPool;
+  });
+  if (matched.length === 0) {
+    ctx.showToast(`No ${drillPool.replace("-", "/")} ${label} cases left—using all!`);
+    return list;
+  }
+  return matched;
+}
 
 function generateLLCase(mode) {
   const preU = randItem(AUFS), postU = randItem(AUFS);
   if (mode === "pll") {
-    const pll = randItem(PLL_CASES);
+    const pool = filterByPool(PLL_CASES, "PLL");
+    const pll = randItem(pool);
     return { caseItem: pll, scramble: simplifyMoves([postU, ...invertAlgTokens(pll.alg), preU]).join(" "), stickering: "PLL" };
   }
-  const oll = randItem(FULL_OLL_ALGS), pll = randItem(PLL_CASES), midU = randItem(AUFS);
+  const ollPool = filterByPool(FULL_OLL_ALGS, "OLL");
+  const pllPool = mode === "ll" ? filterByPool(PLL_CASES, "PLL") : PLL_CASES;
+  const oll = randItem(ollPool), pll = randItem(pllPool), midU = randItem(AUFS);
   const toks = simplifyMoves([postU, ...invertAlgTokens(pll.alg), midU, ...invertAlgTokens(oll.alg), preU]);
   if (mode === "oll") return { caseItem: oll, scramble: toks.join(" "), stickering: "OLL" };
   return { caseItem: { id: `${oll.id}+${pll.id}`, name: `${oll.name} + ${pll.name}`, cat: "LL", stickering: "OLL", alg: `${oll.alg} | ${pll.alg}` }, scramble: toks.join(" "), stickering: "OLL" };
@@ -164,17 +204,46 @@ export function syncMethodViews() {
 function renderAlgs() {
   const m = METHOD_ALGS[ctx.getSettings().profileMethod] ? ctx.getSettings().profileMethod : "CFOP";
   const list = METHOD_ALGS[m], q = algSearchQuery.trim().toLowerCase();
-  const filtered = list.filter((a) => (activeAlgFilter === "ALL" || a.cat === activeAlgFilter) && (!q || a.name.toLowerCase().includes(q) || a.cat.toLowerCase().includes(q) || a.alg.toLowerCase().includes(q) || (a.tip || "").toLowerCase().includes(q)));
+  const filtered = list.filter((a) => {
+    const catOk = activeAlgFilter === "ALL" || a.cat === activeAlgFilter;
+    const stOk = activeStatusFilter === "all" || getAlgStatus(a.id) === activeStatusFilter;
+    const qOk = !q || a.name.toLowerCase().includes(q) || a.cat.toLowerCase().includes(q) || a.alg.toLowerCase().includes(q) || (a.tip || "").toLowerCase().includes(q);
+    return catOk && stOk && qOk;
+  });
+
   const grid = $("alg-grid"); grid.innerHTML = "";
-  if (!filtered.length) { grid.innerHTML = `<p class="muted-text">No algorithms match "${algSearchQuery}".</p>`; return; }
+  if (!filtered.length) { grid.innerHTML = `<p class="muted-text">No algorithms match your filter.</p>`; return; }
 
   filtered.forEach((item) => {
-    const isL = learnedAlgs.includes(item.id), card = document.createElement("div");
+    const st = getAlgStatus(item.id), card = document.createElement("div");
     card.className = `alg-card ${item.id === selectedAlgId ? "selected" : ""}`;
-    card.innerHTML = `<div class="alg-card-top"><span class="alg-name">${item.name}</span><span class="alg-tag">${item.cat}</span></div><div class="alg-moves">${item.alg}</div><div class="alg-card-visual">${renderAlgCaseVisual(item)}</div><p class="alg-tip">${item.tip}</p><div class="alg-card-footer"><button class="btn-outline" data-act="play" type="button">Load</button><button class="btn-outline" data-act="drill" type="button" style="color:var(--accent-color); font-weight:700;">⚡ Practice</button><button class="btn-pill ${isL ? "active" : ""}" data-act="learn" type="button">${isL ? "✓ Learned" : "Mark"}</button></div>`;
+    card.dataset.status = st;
+    card.innerHTML = `
+      <div class="alg-card-top"><span class="alg-name">${item.name}</span><span class="alg-tag">${item.cat}</span></div>
+      <div class="alg-moves">${item.alg}</div>
+      <div class="alg-card-visual">${renderAlgCaseVisual(item)}</div>
+      <p class="alg-tip">${item.tip}</p>
+      <div class="alg-card-footer">
+        <button class="btn-outline" data-act="play" type="button">Load</button>
+        <button class="btn-outline" data-act="drill" type="button" style="color:var(--accent-color); font-weight:700;">⚡ Practice</button>
+        <div class="status-picker" role="group" aria-label="Status">
+          <button class="st-btn st-red ${st === "red" ? "active" : ""}" data-set-status="red" type="button" title="Haven't learned"></button>
+          <button class="st-btn st-yellow ${st === "yellow" ? "active" : ""}" data-set-status="yellow" type="button" title="Know it, practicing speed"></button>
+          <button class="st-btn st-green ${st === "green" ? "active" : ""}" data-set-status="green" type="button" title="Learned"></button>
+        </div>
+      </div>
+    `;
     card.addEventListener("click", (e) => {
+      const stBtn = e.target.closest("button[data-set-status]");
+      if (stBtn) {
+        e.stopPropagation();
+        algStatus[item.id] = stBtn.dataset.setStatus;
+        localStorage.setItem(STORAGE_STATUS_KEY, JSON.stringify(algStatus));
+        ctx.onRepsChanged?.();
+        renderAlgs();
+        return;
+      }
       if (e.target.closest('button[data-act="drill"]')) { e.stopPropagation(); drillMode = "alg"; updateDrillModePills(); loadPracticeAlg(item); ctx.switchTab("improvement"); return; }
-      if (e.target.closest('button[data-act="learn"]')) { e.stopPropagation(); learnedAlgs = learnedAlgs.includes(item.id) ? learnedAlgs.filter((x) => x !== item.id) : [...learnedAlgs, item.id]; localStorage.setItem(STORAGE_LEARNED_KEY, JSON.stringify(learnedAlgs)); renderAlgs(); return; }
       selectedAlgId = item.id; loadAlgSimulator(item); renderAlgs();
     });
     grid.appendChild(card);
@@ -244,6 +313,7 @@ function loadStageSimulator(st) {
 // === IMPROVEMENT & DRILL ENGINE ===
 function updateDrillModePills() {
   $("drill-mode-pills").querySelectorAll("button[data-dmode]").forEach((b) => b.classList.toggle("active", b.dataset.dmode === drillMode));
+  $("drill-pool-select")?.classList.toggle("hidden", drillMode === "alg");
 }
 
 function loadNewLLCase() {
@@ -332,6 +402,8 @@ function stopDrillTimer() {
 
 export function reloadTrainerReps() {
   try { algReps = JSON.parse(localStorage.getItem(STORAGE_ALG_REPS_KEY)) || {}; } catch { algReps = {}; }
+  loadAlgStatusStorage();
+  renderAlgs();
   renderPracticeAlgStats();
   renderImprovementView();
 }
@@ -359,7 +431,8 @@ export function renderImprovementView() {
       const initA = times.slice(0, Math.min(3, count)).reduce((a, b) => a + b, 0) / Math.min(3, count); bStr = ctx.formatTime(initA, 2);
       if (count >= 3 && initA > 0) { gVal = ((initA - curA) / initA) * 100; gStr = `${gVal >= 0 ? "+" : ""}${gVal.toFixed(1)}%`; gains.push(gVal); }
     }
-    rows.push(`<tr style="cursor:pointer;" data-alg-id="${alg.id}"><td><strong>${alg.name}</strong></td><td><span class="alg-tag">${alg.cat}</span></td><td class="num">${bStr}</td><td class="num">${btStr}</td><td class="num">${avStr}</td><td class="num" style="color:${gVal !== null && gVal >= 0 ? "var(--accent-color)" : "inherit"};">${gStr}</td><td class="num">${count}</td></tr>`);
+    const stDot = getAlgStatus(alg.id) === "green" ? "#22c55e" : getAlgStatus(alg.id) === "yellow" ? "#eab308" : "#ef4444";
+    rows.push(`<tr style="cursor:pointer;" data-alg-id="${alg.id}"><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${stDot};margin-right:6px;"></span><strong>${alg.name}</strong></td><td><span class="alg-tag">${alg.cat}</span></td><td class="num">${bStr}</td><td class="num">${btStr}</td><td class="num">${avStr}</td><td class="num" style="color:${gVal !== null && gVal >= 0 ? "var(--accent-color)" : "inherit"};">${gStr}</td><td class="num">${count}</td></tr>`);
   });
 
   $("improve-total-reps").textContent = String(totalReps);
@@ -430,10 +503,11 @@ export function onTrainerTabVisible(tab) {
 
 export function initTrainer(context) {
   ctx = context;
-  try { learnedAlgs = JSON.parse(localStorage.getItem(STORAGE_LEARNED_KEY)) || []; } catch { learnedAlgs = []; }
+  loadAlgStatusStorage();
   try { algReps = JSON.parse(localStorage.getItem(STORAGE_ALG_REPS_KEY)) || {}; } catch { algReps = {}; }
 
   $("alg-search-input")?.addEventListener("input", (e) => { algSearchQuery = e.target.value; renderAlgs(); });
+  $("alg-status-filter")?.addEventListener("change", (e) => { activeStatusFilter = e.target.value; renderAlgs(); e.target.blur(); });
   $("alg-view-mode-btn")?.addEventListener("click", () => { stopAlgPlayback(); algViewMode = algViewMode === "webgl" ? "step" : "webgl"; renderAlgSimulatorStage(); });
   $("alg-play-btn")?.addEventListener("click", () => {
     if (!currentAlgItem) return;
@@ -465,6 +539,10 @@ export function initTrainer(context) {
     drillMode = b.dataset.dmode; updateDrillModePills();
     if (drillMode === "alg") { const m = METHOD_ALGS[ctx.getSettings().profileMethod] ? ctx.getSettings().profileMethod : "CFOP"; loadPracticeAlg(METHOD_ALGS[m][0]); }
     else loadNewLLCase();
+  });
+  $("drill-pool-select")?.addEventListener("change", (e) => {
+    drillPool = e.target.value; e.target.blur();
+    if (drillMode !== "alg") loadNewLLCase();
   });
   $("drill-new-case-btn").addEventListener("click", () => { $("drill-new-case-btn").blur(); loadNewLLCase(); });
   $("drill-reveal-btn").addEventListener("click", () => { $("drill-reveal-btn").blur(); llRevealed = !llRevealed; updateLLCaseRevealUI(); });

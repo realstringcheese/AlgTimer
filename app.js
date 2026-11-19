@@ -927,7 +927,11 @@ $("setting-scramble-size").addEventListener("input", () => updateSetting("scramb
 $("setting-sidebar-width").addEventListener("input", () => updateSetting("sidebarWidth", Number($("setting-sidebar-width").value)));
 
 function pushAllToCloud() {
-  scheduleCloudPush(() => ({ solves, settings, theme: activeTheme, algReps: loadJSON(STORAGE_ALG_REPS_KEY, {}) }));
+  scheduleCloudPush(() => ({
+    solves, settings, theme: activeTheme,
+    algReps: loadJSON(STORAGE_ALG_REPS_KEY, {}),
+    algStatus: loadJSON("algtimer_alg_status_v1", {}),
+  }));
 }
 function saveSolves() { localStorage.setItem(STORAGE_SOLVES_KEY, JSON.stringify(solves)); pushAllToCloud(); }
 function saveSettings() { localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.stringify(settings)); pushAllToCloud(); }

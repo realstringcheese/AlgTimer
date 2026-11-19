@@ -202,6 +202,12 @@
           </div>
           <div class="alg-toolbar">
             <input id="alg-search-input" class="input-text alg-search" type="search" placeholder="Search algs, moves, tips..." />
+            <select id="alg-status-filter" class="select" aria-label="Filter by learning status">
+              <option value="all">All Status</option>
+              <option value="red">Red (Unlearned)</option>
+              <option value="yellow">Yellow (Practicing)</option>
+              <option value="green">Green (Learned)</option>
+            </select>
             <div id="alg-filter-pills" class="filter-pills"></div>
           </div>
         </div>
@@ -241,11 +247,19 @@
             <h1 class="page-title">Improvement &amp; Last-Layer Trainer</h1>
             <p class="page-subtitle">Long-term solve trends, OLL/PLL F2L-solved scrambles, and alg speed tracking.</p>
           </div>
-          <div id="drill-mode-pills" class="filter-pills">
-            <button class="btn-pill active" data-dmode="alg" type="button">Alg Drill</button>
-            <button class="btn-pill" data-dmode="oll" type="button">OLL Trainer</button>
-            <button class="btn-pill" data-dmode="pll" type="button">PLL Trainer</button>
-            <button class="btn-pill" data-dmode="ll" type="button">Last Layer (OLL+PLL)</button>
+          <div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.55rem;">
+            <div id="drill-mode-pills" class="filter-pills">
+              <button class="btn-pill active" data-dmode="alg" type="button">Alg Drill</button>
+              <button class="btn-pill" data-dmode="oll" type="button">OLL Trainer</button>
+              <button class="btn-pill" data-dmode="pll" type="button">PLL Trainer</button>
+              <button class="btn-pill" data-dmode="ll" type="button">Last Layer (OLL+PLL)</button>
+            </div>
+            <select id="drill-pool-select" class="select hidden" aria-label="Random Case Pool">
+              <option value="all">Pool: All Cases</option>
+              <option value="red-yellow">Pool: Red &amp; Yellow Only</option>
+              <option value="yellow">Pool: Yellow Only</option>
+              <option value="red">Pool: Red Only</option>
+            </select>
           </div>
         </div>
 

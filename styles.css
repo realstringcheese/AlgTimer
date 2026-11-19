@@ -386,3 +386,37 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance
   .improve-summary-grid { grid-template-columns: repeat(2, 1fr); }
   .alg-simulator { position: static; }
 }
+/* === ALG STATUS BORDERS & 3-DOT PICKER === */
+.alg-card[data-status="red"] { border-color: rgba(239, 68, 68, 0.55); }
+.alg-card[data-status="yellow"] { border-color: rgba(234, 179, 8, 0.8); }
+.alg-card[data-status="green"] { border-color: rgba(34, 197, 94, 0.85); }
+
+.alg-card[data-status="red"].selected { border-color: #ef4444; box-shadow: 0 0 0 1px #ef4444; }
+.alg-card[data-status="yellow"].selected { border-color: #eab308; box-shadow: 0 0 0 1px #eab308; }
+.alg-card[data-status="green"].selected { border-color: #22c55e; box-shadow: 0 0 0 1px #22c55e; }
+
+.status-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 4px 7px;
+}
+
+.st-btn {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  opacity: 0.32;
+  transition: transform 0.1s, opacity 0.1s, border-color 0.1s;
+}
+.st-btn:hover { opacity: 0.8; transform: scale(1.15); }
+.st-btn.active { opacity: 1; transform: scale(1.18); border-color: #ffffff; }
+
+.st-red { background: #ef4444; }
+.st-yellow { background: #eab308; }
+.st-green { background: #22c55e; }
