@@ -123,16 +123,90 @@ export function getCubeFromScramble(scramble) {
 }
 
 function renderTopDownLLSVG(cube, stickering) {
-  const isOLL = stickering === "OLL" || stickering === "CMLL" || stickering === "COLL";
-  const uCol = (f) => (isOLL ? (f === "U" ? STICKER_HEX.U : "#333740") : STICKER_HEX[f]);
-  const sCol = (f) => (isOLL ? (f === "U" ? STICKER_HEX.U : "#2a2d35") : STICKER_HEX[f]);
-  let out = `<svg viewBox="0 0 112 112" width="100%" height="100%">`;
-  for (let r = 0; r < 3; r++) for (let col = 0; col < 3; col++) out += `<rect x="${20 + col * 24}" y="${20 + r * 24}" width="22" height="22" rx="3" fill="${uCol(cube[r * 3 + col])}" stroke="#111" stroke-width="1.5"/>`;
+  const isCMLL = stickering === "CMLL" || stickering === "COLL";
+  const isOLL = stickering === "OLL";
   const O = CUBE_OFF;
-  [O.B + 2, O.B + 1, O.B].forEach((idx, col) => { out += `<rect x="${20 + col * 24}" y="9" width="22" height="8" rx="2" fill="${sCol(cube[idx])}" stroke="#111" stroke-width="1.2"/>`; });
-  [O.F, O.F + 1, O.F + 2].forEach((idx, col) => { out += `<rect x="${20 + col * 24}" y="95" width="22" height="8" rx="2" fill="${sCol(cube[idx])}" stroke="#111" stroke-width="1.2"/>`; });
-  [O.L, O.L + 1, O.L + 2].forEach((idx, r) => { out += `<rect x="9" y="${20 + r * 24}" width="8" height="22" rx="2" fill="${sCol(cube[idx])}" stroke="#111" stroke-width="1.2"/>`; });
-  [O.R + 2, O.R + 1, O.R].forEach((idx, r) => { out += `<rect x="95" y="${20 + r * 24}" width="8" height="22" rx="2" fill="${sCol(cube[idx])}" stroke="#111" stroke-width="1.2"/>`; });
+
+  // Corners on U face: 0=UBL, 2=UBR, 6=UFL, 8=UFR
+  const cornerUIndices = [0, 2, 6, 8];
+
+  // Colors for U face stickers
+  const getUColor = (r, col) => {
+    const idx = r * 3 + col;
+    const sticker = cube[idx];
+
+    if (isCMLL) {
+      // In CMLL, edges are ignored (dimmed). Corners show yellow if oriented.
+      if (!cornerUIndices.includes(idx)) return "#262930";
+      return sticker === "U" ? STICKER_HEX.U : "#383c46";
+    }
+    if (isOLL) {
+      return sticker === "U" ? STICKER_HEX.U : "#383c46";
+    }
+    // PLL / Full: show real sticker colors
+    return STICKER_HEX[sticker];
+  };
+
+  // Colors for side stickers (tabs around the outside)
+  const getSideColor = (idx, isCorner) => {
+    const sticker = cube[idx];
+
+    if (isCMLL) {
+      // CMLL KEY FIX: Edges are dimmed, but corners MUST show their real side colors!
+      if (!isCorner) return "#22242a";
+      return STICKER_HEX[sticker];
+    }
+    if (isOLL) {
+      return sticker === "U" ? STICKER_HEX.U : "#2a2d35";
+    }
+    return STICKER_HEX[sticker];
+  };
+
+  let out = `<svg viewBox="0 0 112 112" width="100%" height="100%">`;
+
+  // Draw 3x3 U face
+  for (let r = 0; r < 3; r++) {
+    for (let col = 0; col < 3; col++) {
+      out += `<rect x="${20 + col * 24}" y="${20 + r * 24}" width="22" height="22" rx="3" fill="${getUColor(r, col)}" stroke="#111" stroke-width="1.5"/>`;
+    }
+  }
+
+  // Back tabs (top): B[2] (corner), B[1] (edge), B[0] (corner)
+  [
+    { idx: O.B + 2, isCorner: true },
+    { idx: O.B + 1, isCorner: false },
+    { idx: O.B + 0, isCorner: true },
+  ].forEach((tab, col) => {
+    out += `<rect x="${20 + col * 24}" y="9" width="22" height="8" rx="2" fill="${getSideColor(tab.idx, tab.isCorner)}" stroke="#111" stroke-width="1.2"/>`;
+  });
+
+  // Front tabs (bottom): F[0] (corner), F[1] (edge), F[2] (corner)
+  [
+    { idx: O.F + 0, isCorner: true },
+    { idx: O.F + 1, isCorner: false },
+    { idx: O.F + 2, isCorner: true },
+  ].forEach((tab, col) => {
+    out += `<rect x="${20 + col * 24}" y="95" width="22" height="8" rx="2" fill="${getSideColor(tab.idx, tab.isCorner)}" stroke="#111" stroke-width="1.2"/>`;
+  });
+
+  // Left tabs: L[0] (corner), L[1] (edge), L[2] (corner)
+  [
+    { idx: O.L + 0, isCorner: true },
+    { idx: O.L + 1, isCorner: false },
+    { idx: O.L + 2, isCorner: true },
+  ].forEach((tab, r) => {
+    out += `<rect x="9" y="${20 + r * 24}" width="8" height="22" rx="2" fill="${getSideColor(tab.idx, tab.isCorner)}" stroke="#111" stroke-width="1.2"/>`;
+  });
+
+  // Right tabs: R[2] (corner), R[1] (edge), R[0] (corner)
+  [
+    { idx: O.R + 2, isCorner: true },
+    { idx: O.R + 1, isCorner: false },
+    { idx: O.R + 0, isCorner: true },
+  ].forEach((tab, r) => {
+    out += `<rect x="95" y="${20 + r * 24}" width="8" height="22" rx="2" fill="${getSideColor(tab.idx, tab.isCorner)}" stroke="#111" stroke-width="1.2"/>`;
+  });
+
   return `${out}</svg>`;
 }
 
