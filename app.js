@@ -954,4 +954,22 @@ function saveSettings() { localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.string
 function loadArray(k) { try { const p = JSON.parse(localStorage.getItem(k)); return Array.isArray(p) ? p : []; } catch { return []; } }
 function loadJSON(k, fb, merge = false) { try { const p = JSON.parse(localStorage.getItem(k)); return p && typeof p === "object" && !Array.isArray(p) ? (merge ? { ...fb, ...p } : p) : fb; } catch { return fb; } }
 
+// === SECTION A11: KEYBOARD NAVIGATION ===
+window.addEventListener("keydown", (e) => {
+  if (isModalOpen()) return;
+  if (activeTab !== "timer") return;
+  
+  // Ignore if user is typing in a search box or input
+  if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "SELECT") return;
+
+  if (e.code === "ArrowRight" || e.code === "ArrowLeft") {
+    e.preventDefault();
+    // Only allow changing scramble if not solving
+    if (timerState === "idle" || timerState === "stopping") {
+      loadNextScramble(settings.event);
+      showToast("New scramble loaded");
+    }
+  }
+});
+
 init();
