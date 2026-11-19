@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Outfit:wght@500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.cubing.net/v0/js/scramble-display" type="module"></script>
 </head>
 <body>
   <div id="bg-layer" class="bg-layer" aria-hidden="true">
@@ -88,9 +89,9 @@
       <aside class="left-sidebar">
         <div class="panel-card">
           <div class="panel-header"><span>Scramble Preview</span><span id="preview-mode-badge">3D</span></div>
-          <div class="preview-box">
-            <twisty-player id="scramble-player" puzzle="3x3x3" visualization="3D" background="none" control-panel="none" hint-facelets="none" camera-latitude-limit="none" experimental-drag-input="auto"></twisty-player>
-          </div>
+          <div id="preview-box" class="preview-box">
+         <scramble-display id="scramble-player" event="333" scramble="" visualization="3D"></scramble-display>
+       </div>
           <div class="preview-controls">
             <button id="toggle-dim-btn" class="btn-outline" type="button">Switch to 2D</button>
             <button id="reset-cam-btn" class="btn-outline" type="button">Reset View</button>

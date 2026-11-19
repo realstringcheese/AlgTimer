@@ -118,7 +118,7 @@ function getCubeAtStep(alg, stepIdx) {
   for (let i = 0; i < Math.min(stepIdx, toks.length); i++) applyCubeToken(c, toks[i]);
   return c;
 }
-function getCubeFromScramble(scramble) {
+export function getCubeFromScramble(scramble) {
   const c = createSolvedCube(); scramble.trim().split(/\s+/).filter(Boolean).forEach((t) => applyCubeToken(c, t)); return c;
 }
 
@@ -136,7 +136,7 @@ function renderTopDownLLSVG(cube, stickering) {
   return `${out}</svg>`;
 }
 
-function renderIsoCubeSVG(cube, size = 24, cx = 100, cy = 88, vb = "0 0 200 176") {
+export function renderIsoCubeSVG(cube, size = 24, cx = 100, cy = 88, vb = "0 0 200 176") {
   const ux = [-0.866 * size, -0.5 * size], vx = [0.866 * size, -0.5 * size], dn = [0, size];
   const pt = (a, b, d) => `${(cx + a * ux[0] + b * vx[0] + d * dn[0]).toFixed(1)},${(cy + a * ux[1] + b * vx[1] + d * dn[1]).toFixed(1)}`;
   const poly = (pts, fill) => `<polygon points="${pts.join(" ")}" fill="${fill}" stroke="#111" stroke-width="2" stroke-linejoin="round"/>`;

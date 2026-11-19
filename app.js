@@ -1,5 +1,5 @@
 import { EVENT_TO_PUZZLE, CSTIMER_EVENT_MAP, PREMADE_SCENES, QUICK_MOODS, COLOR_PRESETS, SCENE_PRESETS } from "./data.js";
-import { initTrainer, syncMethodViews, onTrainerTabVisible, renderImprovementView, handleImprovementKeyDown, handleImprovementKeyUp, handleImprovementPointerUp, reloadTrainerReps } from "./trainer.js";
+import { initTrainer, syncMethodViews, onTrainerTabVisible, renderImprovementView, handleImprovementKeyDown, handleImprovementKeyUp, handleImprovementPointerUp, reloadTrainerReps, renderIsoCubeSVG, getCubeFromScramble } from "./trainer.js";
 import { initCloud, signInGoogle, signOutGoogle, scheduleCloudPush } from "./cloud.js";
 
 // === STORAGE KEYS & DEFAULTS ===
@@ -197,6 +197,7 @@ async function init() {
 
   ensureScramblerLoaded().then((ok) => { if (ok) { if (timerState === "idle") loadNextScramble(settings.event); } else scrambleStatusEl.textContent = "Offline fallback (Wi-Fi)"; });
   importWithTimeout("https://cdn.cubing.net/v0/js/cubing/twisty", 12000).then(() => updateScramblePreview()).catch(() => { previewModeBadge.textContent = "Offline"; });
+  customElements.whenDefined("scramble-display").then(() => updateScramblePreview());
 }
 
 function showToast(msg) { toastEl.textContent = msg; toastEl.classList.remove("hidden"); clearTimeout(toastTimeoutId); toastTimeoutId = setTimeout(() => toastEl.classList.add("hidden"), 3200); }
@@ -468,12 +469,23 @@ async function prefetchScramble(eventId) {
 }
 
 function updateScramblePreview() {
-  const puzzle = EVENT_TO_PUZZLE[settings.event] || "3x3x3", dim = settings.event === "clock" ? "2D" : settings.previewDim;
-  scramblePlayer.setAttribute("puzzle", puzzle); scramblePlayer.setAttribute("visualization", dim);
-  scramblePlayer.setAttribute("experimental-setup-alg", currentScramble || ""); scramblePlayer.setAttribute("alg", "");
-  scramblePlayer.setAttribute("camera-latitude-limit", "none"); scramblePlayer.setAttribute("experimental-drag-input", "auto");
-  try { scramblePlayer.puzzle = puzzle; scramblePlayer.visualization = dim; scramblePlayer.experimentalSetupAlg = currentScramble || ""; scramblePlayer.alg = ""; } catch {}
-  previewModeBadge.textContent = dim; toggleDimBtn.textContent = settings.previewDim === "3D" ? "Switch to 2D" : "Switch to 3D";
+  const dim = settings.event === "clock" ? "2D" : settings.previewDim;
+  previewModeBadge.textContent = dim;
+  toggleDimBtn.textContent = settings.previewDim === "3D" ? "Switch to 2D" : "Switch to 3D";
+
+  const host = $("preview-box") || $("scramble-player")?.parentElement;
+  if (!host) return;
+
+  if (customElements.get("scramble-display")) {
+    host.innerHTML = `<scramble-display id="scramble-player" event="${settings.event}" scramble="${currentScramble || ''}" visualization="${dim}"></scramble-display>`;
+  } else if (customElements.get("twisty-player")) {
+    const puzzle = EVENT_TO_PUZZLE[settings.event] || "3x3x3";
+    host.innerHTML = `<twisty-player id="scramble-player" puzzle="${puzzle}" visualization="${dim}" experimental-setup-alg="${currentScramble || ''}" background="none" control-panel="none" hint-facelets="none" camera-latitude-limit="none" experimental-drag-input="auto"></twisty-player>`;
+  } else {
+    // Instant 3D SVG preview if cdn.cubing.net is slow or blocked
+    const cube = getCubeFromScramble(currentScramble || "");
+    host.innerHTML = `<div style="width:100%;height:100%;display:grid;place-items:center;">${renderIsoCubeSVG(cube, 27, 105, 92, "0 0 210 185")}</div>`;
+  }
 }
 
 toggleDimBtn.addEventListener("click", () => { toggleDimBtn.blur(); updateSetting("previewDim", settings.previewDim === "3D" ? "2D" : "3D"); updateScramblePreview(); });
