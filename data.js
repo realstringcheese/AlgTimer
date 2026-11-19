@@ -151,15 +151,86 @@ export const FULL_OLL_ALGS = [
   { id: "oll-57", name: "OLL 57 (H)", cat: "OLL", stickering: "OLL", alg: "R U R' U' M' U R U' r'", tip: "H-Shape." },
 ];
 
+// === ALL 42 CMLL CASES + LSE + SB FOR ROUX ===
+export const ROUX_ALGS = [
+  // CMLL O Set
+  { id: "cmll-o-adj", name: "CMLL O - Adjacent", cat: "CMLL", stickering: "CMLL", alg: "R U R' F' R U R' U' R' F R2 U' R' U'", tip: "Solved corners except two adjacent." },
+  { id: "cmll-o-diag", name: "CMLL O - Diagonal", cat: "CMLL", stickering: "CMLL", alg: "F R U' R' U' R U R' F' R U R' U' R' F R F'", tip: "Opposite corners swap diagonally." },
+  // CMLL U Set
+  { id: "cmll-u-fwd", name: "CMLL U - Forward", cat: "CMLL", stickering: "CMLL", alg: "R2 D R' U2 R D' R' U2 R'", tip: "Headlights forward." },
+  { id: "cmll-u-slash", name: "CMLL U - Slash", cat: "CMLL", stickering: "CMLL", alg: "r U' r' U r' D' r U' r' D r", tip: "Slash pattern." },
+  { id: "cmll-u-x", name: "CMLL U - X", cat: "CMLL", stickering: "CMLL", alg: "R2 D' R U2 R' D R U2 R", tip: "X-shaped headlights." },
+  { id: "cmll-u-bot", name: "CMLL U - Bottom", cat: "CMLL", stickering: "CMLL", alg: "R U R' U' R' F R F'", tip: "Classic trigger." },
+  { id: "cmll-u-row", name: "CMLL U - Row", cat: "CMLL", stickering: "CMLL", alg: "r U R' U' r' R U R U' R'", tip: "Solid row." },
+  { id: "cmll-u-inv", name: "CMLL U - Inverse Row", cat: "CMLL", stickering: "CMLL", alg: "R' U2 R F U' R' U R U F'", tip: "Inverted row." },
+  // CMLL T Set
+  { id: "cmll-t-cham", name: "CMLL T - Chameleon", cat: "CMLL", stickering: "CMLL", alg: "r U R' U' r' F R F'", tip: "Headlights facing left/right." },
+  { id: "cmll-t-left", name: "CMLL T - Left", cat: "CMLL", stickering: "CMLL", alg: "L' U' L U l F' L' F", tip: "Left-side headlights." },
+  { id: "cmll-t-right", name: "CMLL T - Right", cat: "CMLL", stickering: "CMLL", alg: "r' U2 R U R' U r", tip: "Right-side headlights." },
+  { id: "cmll-t-rows", name: "CMLL T - Rows", cat: "CMLL", stickering: "CMLL", alg: "r U2 R' U' R U' r'", tip: "T-rows." },
+  { id: "cmll-t-slash", name: "CMLL T - Slash", cat: "CMLL", stickering: "CMLL", alg: "F R U R' U' R U' R' U' R U R' F'", tip: "Slash." },
+  { id: "cmll-t-back", name: "CMLL T - Back", cat: "CMLL", stickering: "CMLL", alg: "R' U r U2 R2 F R F' r", tip: "Back headlights." },
+  // CMLL L Set
+  { id: "cmll-l-pure", name: "CMLL L - Pure", cat: "CMLL", stickering: "CMLL", alg: "F R U' R' U' R U R' F'", tip: "Pure Bowtie mirror." },
+  { id: "cmll-l-front", name: "CMLL L - Front", cat: "CMLL", stickering: "CMLL", alg: "R U2 R2 F R F' R U2 R'", tip: "Front headlights." },
+  { id: "cmll-l-back", name: "CMLL L - Back", cat: "CMLL", stickering: "CMLL", alg: "R U2 R' U' R U R' U2 R' F R F'", tip: "Back headlights." },
+  { id: "cmll-l-diag", name: "CMLL L - Diagonal", cat: "CMLL", stickering: "CMLL", alg: "F R' F' R U R U' R'", tip: "Diagonal swap." },
+  { id: "cmll-l-right", name: "CMLL L - Right", cat: "CMLL", stickering: "CMLL", alg: "r U2 R' U' R U R' U' r' R U' R'", tip: "Right headlights." },
+  { id: "cmll-l-left", name: "CMLL L - Left", cat: "CMLL", stickering: "CMLL", alg: "R' U2 R U R' U' R U2 R F' R' F", tip: "Left headlights." },
+  // CMLL Sune Set
+  { id: "cmll-s-pure", name: "CMLL S - Pure", cat: "CMLL", stickering: "CMLL", alg: "R U R' U R U2 R'", tip: "Standard Sune." },
+  { id: "cmll-s-anti", name: "CMLL S - Anti-Adjacent", cat: "CMLL", stickering: "CMLL", alg: "R U R' U' R' F R F' R U R' U R U2 R'", tip: "Anti-adjacent." },
+  { id: "cmll-s-adj", name: "CMLL S - Adjacent", cat: "CMLL", stickering: "CMLL", alg: "L' U2 L U2 L F' L' F", tip: "Adjacent corners." },
+  { id: "cmll-s-diag", name: "CMLL S - Diagonal", cat: "CMLL", stickering: "CMLL", alg: "F R' F' R U2 R U2 R'", tip: "Diagonal swap." },
+  { id: "cmll-s-front", name: "CMLL S - Front", cat: "CMLL", stickering: "CMLL", alg: "R U R' U R' F R F' R U2 R'", tip: "Front block." },
+  { id: "cmll-s-back", name: "CMLL S - Back", cat: "CMLL", stickering: "CMLL", alg: "r U' r2 U r2 U r2 U' r", tip: "M-slice preservation." },
+  // CMLL Anti-Sune Set
+  { id: "cmll-as-pure", name: "CMLL AS - Pure", cat: "CMLL", stickering: "CMLL", alg: "R U2 R' U' R U' R'", tip: "Standard Anti-Sune." },
+  { id: "cmll-as-adj", name: "CMLL AS - Adjacent", cat: "CMLL", stickering: "CMLL", alg: "R' U2 R U2 R' F R F'", tip: "Adjacent corners." },
+  { id: "cmll-as-anti", name: "CMLL AS - Anti-Adjacent", cat: "CMLL", stickering: "CMLL", alg: "R' F R F' R' U' R", tip: "Anti-adjacent." },
+  { id: "cmll-as-diag", name: "CMLL AS - Diagonal", cat: "CMLL", stickering: "CMLL", alg: "F' L F L' U2 L' U2 L", tip: "Diagonal swap." },
+  { id: "cmll-as-front", name: "CMLL AS - Front", cat: "CMLL", stickering: "CMLL", alg: "L' U' L U' L F' L' F L' U2 L", tip: "Front block." },
+  { id: "cmll-as-back", name: "CMLL AS - Back", cat: "CMLL", stickering: "CMLL", alg: "r' U r2 U' r2 U' r2 U r'", tip: "Back block." },
+  // CMLL Pi Set
+  { id: "cmll-pi-pure", name: "CMLL Pi - Pure", cat: "CMLL", stickering: "CMLL", alg: "F R U R' U' R U R' U' F'", tip: "Pure Pi." },
+  { id: "cmll-pi-right", name: "CMLL Pi - Right", cat: "CMLL", stickering: "CMLL", alg: "R U2 R' U' R U R' U2 R' F R F'", tip: "Right block." },
+  { id: "cmll-pi-left", name: "CMLL Pi - Left", cat: "CMLL", stickering: "CMLL", alg: "r U' r2 U r2 U r2 U' r", tip: "Left block." },
+  { id: "cmll-pi-slash", name: "CMLL Pi - Slash", cat: "CMLL", stickering: "CMLL", alg: "R' F R U F U' R U R' U' F'", tip: "Slash." },
+  { id: "cmll-pi-x", name: "CMLL Pi - X", cat: "CMLL", stickering: "CMLL", alg: "r U' r' U' r U r' U' r U' r'", tip: "X-Pi." },
+  { id: "cmll-pi-back", name: "CMLL Pi - Back", cat: "CMLL", stickering: "CMLL", alg: "R' U' R' F R F' R U' R' U2 R", tip: "Back block." },
+  // CMLL H Set
+  { id: "cmll-h-pure", name: "CMLL H - Pure", cat: "CMLL", stickering: "CMLL", alg: "R U R' U R U' R' U R U2 R'", tip: "Double Sune." },
+  { id: "cmll-h-rows", name: "CMLL H - Rows", cat: "CMLL", stickering: "CMLL", alg: "F R U R' U' R U R' U' R U R' U' F'", tip: "H-Rows." },
+  { id: "cmll-h-slash", name: "CMLL H - Slash", cat: "CMLL", stickering: "CMLL", alg: "r U' r2 F R' F' r2 U r'", tip: "Slash." },
+  { id: "cmll-h-diag", name: "CMLL H - Diagonal", cat: "CMLL", stickering: "CMLL", alg: "R U2 R2 F R F' U2 R' F R F'", tip: "Diagonal swap." },
+
+  // LSE (Last Six Edges)
+  { id: "lse-arrow", name: "LSE 4a - Arrow", cat: "LSE", stickering: "full", alg: "M' U M'", tip: "3 bad on U, 1 on D." },
+  { id: "lse-4flip-u", name: "LSE 4a - 4-Flip (U)", cat: "LSE", stickering: "full", alg: "M' U' M' U' M' U' M'", tip: "All 4 U edges bad." },
+  { id: "lse-4flip-ud", name: "LSE 4a - 4-Flip (U & D)", cat: "LSE", stickering: "full", alg: "M' U2 M' U2 M' U M'", tip: "2 on U, 2 on D." },
+  { id: "lse-2flip-adj", name: "LSE 4a - 2-Flip Adj", cat: "LSE", stickering: "full", alg: "M' U M' U2 M' U M'", tip: "2 adjacent bad." },
+  { id: "lse-2flip-opp", name: "LSE 4a - 2-Flip Opp", cat: "LSE", stickering: "full", alg: "M' U2 M' U M' U2 M'", tip: "2 opposite bad." },
+  { id: "lse-6flip", name: "LSE 4a - 6-Flip", cat: "LSE", stickering: "full", alg: "M' U M' U M' U M' U' M' U M' U M'", tip: "All 6 bad edges." },
+  { id: "lse-ulur-diag", name: "LSE 4b - UL/UR Diag", cat: "LSE", stickering: "full", alg: "M2 U M2 U'", tip: "Insert UL/UR." },
+  { id: "lse-dots", name: "LSE 4c - Dots / H", cat: "LSE", stickering: "full", alg: "M2 U2 M2 U2", tip: "Opposite swap." },
+  { id: "lse-column", name: "LSE 4c - Column / W", cat: "LSE", stickering: "full", alg: "M2 U2 M' U2 M'", tip: "M-slice cycle." },
+  { id: "lse-bars", name: "LSE 4c - Bars / Z", cat: "LSE", stickering: "full", alg: "M2 U M2 U M' U2 M2 U2 M'", tip: "Adjacent swap." },
+
+  // SB (Second Block)
+  { id: "sb-wide-insert", name: "SB - Wide Insert", cat: "SB", stickering: "SecondBlock", alg: "r U' r' U2 r U r'", tip: "Pairs and inserts FR slot." },
+  { id: "sb-back-pair", name: "SB - Back Pair Track", cat: "SB", stickering: "SecondBlock", alg: "R' U' R U R' U' R", tip: "Solves BR pair cleanly." },
+  { id: "sb-sledge", name: "SB - Sledge Insert", cat: "SB", stickering: "SecondBlock", alg: "R' F R F'", tip: "Solves pair avoiding rotation." },
+];
+
 export const METHOD_GUIDES = {
   CFOP: {
     title: "CFOP Solve Guide",
     subtitle: "Cross, F2L, OLL, and PLL—optimize every split of your solve.",
     stages: [
-      { id: "cfop-cross", title: "1. Cross", split: "~12% of solve • <= 8 moves", stickering: "Cross", alg: "F R' D' R F2", points: ["<strong>Solve on Bottom (D):</strong> Keep white/yellow on D so you transition directly into F2L with zero cube flips.", "<strong>Plan all 4 edges in inspection:</strong> Learn relative color order (Blue-Orange-Green-Red) so you don't align centers early."] },
-      { id: "cfop-f2l", title: "2. F2L (First Two Layers)", split: "~50% of solve", stickering: "F2L", alg: "U R U' R' U' F' U F", points: ["<strong>Fill back slots first:</strong> Solving BL/BR early keeps open pieces visible in front."] },
-      { id: "cfop-oll", title: "3. OLL (Orient Last Layer)", split: "~18% of solve • All 57 OLLs", stickering: "OLL", alg: "F R U R' U' F' R U R' U R U2 R'", points: ["<strong>Full OLL:</strong> Learn all 57 cases to orient the last layer in one look."] },
-      { id: "cfop-pll", title: "4. PLL (Permute Last Layer)", split: "~20% of solve • All 21 PLLs", stickering: "PLL", alg: "R U R' U' R' F R2 U' R' U' R U R' F'", points: ["<strong>Full PLL:</strong> Master all 21 permutation cases."] },
+      { id: "cfop-cross", title: "1. Cross", split: "~12% of solve • <= 8 moves", stickering: "Cross", alg: "F R' D' R F2", points: ["<strong>Solve on Bottom (D):</strong> Keep white/yellow on D so you transition directly into F2L with zero cube flips.", "<strong>Plan all 4 edges in inspection:</strong> Learn relative color order (Blue-Orange-Green-Red) so you don't align centers early.", "<strong>8-move rule:</strong> Every 3x3 cross can be solved in 8 moves or fewer."] },
+      { id: "cfop-f2l", title: "2. F2L (First Two Layers)", split: "~50% of solve • Core speed", stickering: "F2L", alg: "U R U' R' U' F' U F", points: ["<strong>Fill back slots first:</strong> Solving BL/BR early keeps open pieces visible in front.", "<strong>Limit cube rotations:</strong> Use wide inserts or sledgehammers (R' F R F') instead of rotating twice.", "<strong>Lookahead drill:</strong> Turn at 60% speed with zero pauses between pairs."] },
+      { id: "cfop-oll", title: "3. OLL (Orient Last Layer)", split: "~18% of solve • All 57 OLLs", stickering: "OLL", alg: "F R U R' U' F' R U R' U R U2 R'", points: ["<strong>Full OLL:</strong> Learn all 57 cases to orient the last layer in one look.", "<strong>Use triggers:</strong> Group moves into Sexy (R U R' U') and Sledge (R' F R F')."] },
+      { id: "cfop-pll", title: "4. PLL (Permute Last Layer)", split: "~20% of solve • All 21 PLLs", stickering: "PLL", alg: "R U R' U' R' F R2 U' R' U' R U R' F'", points: ["<strong>Full PLL:</strong> Master all 21 permutation cases.", "<strong>2-sided recognition:</strong> Check Front + Right faces for headlights and blocks without spinning."] },
     ],
   },
   Roux: {
@@ -167,15 +238,15 @@ export const METHOD_GUIDES = {
     stages: [
       { id: "roux-fb", title: "1. First Block", split: "~20% of solve", stickering: "FirstBlock", alg: "L' U' L M' U2 r U' r'", points: ["<strong>1x2x3 on Left:</strong> Solve DL edge + left pairs."] },
       { id: "roux-sb", title: "2. Second Block", split: "~32% of solve", stickering: "SecondBlock", alg: "R U' R' U2 r U r'", points: ["<strong>1x2x3 on Right:</strong> Pair DR edge + right slots."] },
-      { id: "roux-cmll", title: "3. CMLL", split: "~22% of solve", stickering: "CMLL", alg: "R U R' U R U2 R'", points: ["<strong>Corners:</strong> Solve 4 U-layer corners preserving M-slice."] },
-      { id: "roux-lse", title: "4. LSE", split: "~26% of solve", stickering: "full", alg: "M' U M' U2 M U M' U2 M' U2", points: ["<strong>Last 6 Edges:</strong> EO, UL/UR, and EP."] },
+      { id: "roux-cmll", title: "3. CMLL", split: "~22% of solve • 42 algs", stickering: "CMLL", alg: "R U R' U R U2 R'", points: ["<strong>Corners:</strong> Solve 4 U-layer corners preserving M-slice."] },
+      { id: "roux-lse", title: "4. LSE", split: "~26% of solve • Pure M & U", stickering: "full", alg: "M' U M' U2 M U M' U2 M' U2", points: ["<strong>Last 6 Edges:</strong> EO, UL/UR, and EP."] },
     ],
   },
   ZZ: {
     title: "ZZ Solve Guide", subtitle: "Edge Orientation first.",
     stages: [
-      { id: "zz-eo", title: "1. EOLine", split: "~18% of solve", stickering: "EO", alg: "F R' F' D R' D'", points: ["<strong>Orient 12 Edges:</strong> R, U, L ergonomics for the rest."] },
-      { id: "zz-f2l", title: "2. ZZF2L", split: "~48% of solve", stickering: "F2L", alg: "R U' R' U2 L' U L", points: ["<strong>Zero Rotations:</strong> Build blocks smoothly."] },
+      { id: "zz-eo", title: "1. EOLine", split: "~18% of solve", stickering: "EO", alg: "F R' F' D R' D'", points: ["<strong>Orient 12 Edges:</strong> Flip bad edges so all future F2L needs only R, U, L."] },
+      { id: "zz-f2l", title: "2. ZZF2L", split: "~48% of solve • Rotationless", stickering: "F2L", alg: "R U' R' U2 L' U L", points: ["<strong>Zero Rotations:</strong> Build blocks smoothly."] },
       { id: "zz-ocll", title: "3. OCLL / COLL", split: "~16% of solve", stickering: "COLL", alg: "R U R' U R U2 R'", points: ["<strong>Top Cross Done:</strong> EO guarantees top cross is oriented."] },
       { id: "zz-pll", title: "4. EPLL", split: "~18% of solve", stickering: "PLL", alg: "M2 U M2 U2 M2 U M2", points: ["<strong>Easy Finish:</strong> Simple 4-edge permutations."] },
     ],
@@ -193,12 +264,7 @@ export const METHOD_GUIDES = {
 
 export const METHOD_ALGS = {
   CFOP: [...PLL_CASES, ...FULL_OLL_ALGS],
-  Roux: [
-    { id: "rx-sune", name: "CMLL Sune", cat: "CMLL", stickering: "CMLL", alg: "R U R' U R U2 R'", tip: "1 oriented corner front-left." },
-    { id: "rx-anti", name: "CMLL Anti-Sune", cat: "CMLL", stickering: "CMLL", alg: "R U2 R' U' R U' R'", tip: "1 oriented corner back-left." },
-    { id: "rx-h", name: "CMLL H", cat: "CMLL", stickering: "CMLL", alg: "R U R' U R U' R' U R U2 R'", tip: "Headlights front and back." },
-    { id: "rx-eo", name: "LSE EO Arrow", cat: "LSE", stickering: "full", alg: "M' U M'", tip: "Orients all 6 edges." },
-  ],
+  Roux: ROUX_ALGS,
   ZZ: [
     { id: "zz-sune", name: "OCLL Sune", cat: "OCLL / COLL", stickering: "COLL", alg: "R U R' U R U2 R'", tip: "Top cross oriented." },
     { id: "zz-ua", name: "EPLL Ua-Perm", cat: "EPLL", stickering: "PLL", alg: "R U' R U R U R U' R' U' R2", tip: "Pure R-U edge cycle." },
