@@ -12,14 +12,14 @@ const STORAGE_COLOR_HISTORY_KEY = "algtimer_color_history_v1";
 const STORAGE_ALG_REPS_KEY = "algtimer_alg_reps_v1";
 
 const DEFAULT_THEME = {
-  presetId: "c-mono", mood: "mono", bgMode: "color", sceneId: "mountains",
-  bgColor: "#0a0a0a", sidebarColor: "#121212", cardColor: "#1b1b1b", scrambleColor: "#141414",
-  textColor: "#f5f5f5", mutedColor: "#9a9a9a", accentColor: "#f5f5f5",
-  holdingColor: "#ef4444", readyColor: "#22c55e",
-  sidebarAlpha: 90, sidebarBlur: 14, radius: 10,
+  presetId: "c-amber", mood: "amber", bgMode: "color", sceneId: "hearth",
+  bgColor: "#110d0a", sidebarColor: "#1a1410", cardColor: "#241b15", scrambleColor: "#211913",
+  textColor: "#fef3c7", mutedColor: "#d97706", accentColor: "#f59e0b",
+  holdingColor: "#ef4444", readyColor: "#84cc16",
+  sidebarAlpha: 90, sidebarBlur: 12, radius: 10,
   timerFont: '"JetBrains Mono", ui-monospace, Menlo, monospace',
   uiFont: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif',
-  timerBackdrop: false, scrambleBox: false, bgBlur: 8, bgDim: 45, bgPosY: 50, bgScale: 105,
+  timerBackdrop: false, scrambleBox: true, bgBlur: 8, bgDim: 45, bgPosY: 50, bgScale: 105,
 };
 
 const COLOR_SLOTS = [

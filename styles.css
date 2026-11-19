@@ -1,20 +1,20 @@
 /* === SECTION S1: THEME VARIABLES & RESET === */
 :root {
-  --bg-primary: #0a0a0a;
-  --sidebar-bg-rgba: rgba(18, 18, 18, 0.9);
-  --sidebar-blur: 14px;
-  --card-bg-rgba: rgba(27, 27, 27, 0.82);
-  --scramble-bg-rgba: rgba(20, 20, 20, 0);
+  --bg-primary: #110d0a;
+  --sidebar-bg-rgba: rgba(26, 20, 16, 0.9);
+  --sidebar-blur: 12px;
+  --card-bg-rgba: rgba(36, 27, 21, 0.85);
+  --scramble-bg-rgba: rgba(33, 25, 19, 0.72);
   --border-color: rgba(255, 255, 255, 0.09);
   --border-strong: rgba(255, 255, 255, 0.22);
-  --text-primary: #f5f5f5;
-  --text-secondary: #9a9a9a;
-  --text-muted: #666666;
-  --accent-color: #f5f5f5;
+  --text-primary: #fef3c7;
+  --text-secondary: #d97706;
+  --text-muted: #92602a;
+  --accent-color: #f59e0b;
   --accent-contrast: #0a0a0a;
   --state-idle: var(--text-primary);
   --state-holding: #ef4444;
-  --state-ready: #22c55e;
+  --state-ready: #84cc16;
   --state-running: var(--text-primary);
   --font-ui: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   --font-timer: "JetBrains Mono", ui-monospace, Menlo, monospace;
