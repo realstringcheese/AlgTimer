@@ -44,6 +44,9 @@ let savedPresets = loadArray(STORAGE_CUSTOM_PRESETS_KEY);
 let colorHistory = loadArray(STORAGE_COLOR_HISTORY_KEY);
 let solves = loadArray(STORAGE_SOLVES_KEY);
 
+let scrambleHistory = [];
+let historyIndex = -1;
+
 let draftTheme = null, uploadedBgDataUrl = null, draftUploadedBgDataUrl = null;
 let activeTab = "timer", activeStudioTab = "presets", activeColorSlot = "bgColor";
 let wheelHSV = { h: 0, s: 0, v: 0.04 }, isDraggingWheel = false;
@@ -450,19 +453,40 @@ async function generateScramble(eventId) {
   return { text: (await randomScrambleForEvent(eventId)).toString(), offline: false };
 }
 
-async function loadNextScramble(eventId) {
+async function loadNextScramble(eventId, isBackwards = false) {
   scrambleStatusEl.textContent = "Generating...";
-  try {
-    let r;
-    if (prefetchedScramble && prefetchedEvent === eventId) { r = prefetchedScramble; prefetchedScramble = null; prefetchedEvent = null; }
-    else r = await generateScramble(eventId);
-    if (eventId === settings.event) {
-      currentScramble = r.text; scrambleTextEl.textContent = currentScramble;
-      scrambleStatusEl.textContent = r.offline ? "Offline fallback (Wi-Fi)" : "";
-      updateScramblePreview();
+  
+  // If we are moving backwards, pull from history
+  if (isBackwards && historyIndex > 0) {
+    historyIndex--;
+    currentScramble = scrambleHistory[historyIndex];
+  } 
+  // If moving forwards, either pull from stack or generate new
+  else if (!isBackwards && historyIndex < scrambleHistory.length - 1) {
+    historyIndex++;
+    currentScramble = scrambleHistory[historyIndex];
+  } 
+  else {
+    // Generate fresh
+    try {
+      let r = (prefetchedScramble && prefetchedEvent === eventId) 
+        ? (prefetchedScramble) : await generateScramble(eventId);
+      
+      currentScramble = r.text;
+      scrambleHistory.push(currentScramble);
+      historyIndex = scrambleHistory.length - 1;
+      
       if (!r.offline) prefetchScramble(eventId);
+    } catch (err) {
+      currentScramble = localFallbackScramble(eventId);
     }
-  } catch { currentScramble = localFallbackScramble(eventId); scrambleTextEl.textContent = currentScramble; scrambleStatusEl.textContent = "Offline fallback"; }
+  }
+
+  if (eventId === settings.event) {
+    scrambleTextEl.textContent = currentScramble;
+    scrambleStatusEl.textContent = "";
+    updateScramblePreview();
+  }
 }
 async function prefetchScramble(eventId) {
   try { const n = await generateScramble(eventId); if (eventId === settings.event && !n.offline) { prefetchedScramble = n; prefetchedEvent = eventId; } } catch {}
@@ -954,20 +978,23 @@ function saveSettings() { localStorage.setItem(STORAGE_SETTINGS_KEY, JSON.string
 function loadArray(k) { try { const p = JSON.parse(localStorage.getItem(k)); return Array.isArray(p) ? p : []; } catch { return []; } }
 function loadJSON(k, fb, merge = false) { try { const p = JSON.parse(localStorage.getItem(k)); return p && typeof p === "object" && !Array.isArray(p) ? (merge ? { ...fb, ...p } : p) : fb; } catch { return fb; } }
 
-// === SECTION A11: KEYBOARD NAVIGATION ===
 window.addEventListener("keydown", (e) => {
-  if (isModalOpen()) return;
-  if (activeTab !== "timer") return;
-  
-  // Ignore if user is typing in a search box or input
+  if (isModalOpen() || activeTab !== "timer") return;
   if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "SELECT") return;
 
-  if (e.code === "ArrowRight" || e.code === "ArrowLeft") {
+  if (e.code === "ArrowRight") {
     e.preventDefault();
-    // Only allow changing scramble if not solving
     if (timerState === "idle" || timerState === "stopping") {
-      loadNextScramble(settings.event);
-      showToast("New scramble loaded");
+      loadNextScramble(settings.event, false); // Go Forward
+    }
+  } else if (e.code === "ArrowLeft") {
+    e.preventDefault();
+    if (timerState === "idle" || timerState === "stopping") {
+      if (historyIndex > 0) {
+        loadNextScramble(settings.event, true); // Go Back
+      } else {
+        showToast("No previous scramble");
+      }
     }
   }
 });
