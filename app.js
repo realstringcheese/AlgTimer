@@ -999,4 +999,29 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+// === SECTION A12: KEYBOARD SHORTCUTS ===
+window.addEventListener("keydown", (e) => {
+  // Only allow when timer is idle (not solving) and no modals are open
+  if (isModalOpen() || timerState !== "idle" || activeTab !== "timer") return;
+  if (document.activeElement.tagName === "INPUT") return;
+
+  const eventSolves = getCurrentEventSolves();
+  const latest = eventSolves[eventSolves.length - 1];
+  if (!latest) return;
+
+  // DNF (press 'd')
+  if (e.key.toLowerCase() === 'd') {
+    e.preventDefault();
+    togglePenalty(latest.id, "DNF");
+    showToast(latest.penalty === "DNF" ? "DNF applied" : "Penalty removed");
+  }
+
+  // +2 (press '+' or '2')
+  if (e.key === '+' || e.key === '2') {
+    e.preventDefault();
+    togglePenalty(latest.id, "+2");
+    showToast(latest.penalty === "+2" ? "+2 applied" : "Penalty removed");
+  }
+});
+
 init();
