@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Dark Espresso Tile Background -->
+    <linearGradient id="tileBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#19130e"/>
+      <stop offset="100%" stop-color="#0a0806"/>
+    </linearGradient>
+
+    <!-- Glowing Amber Active Stickers -->
+    <linearGradient id="amberSticker" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fef3c7"/>
+      <stop offset="25%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+
+    <!-- Cut / Diagonal Slice Stickers -->
+    <linearGradient id="cutSticker" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#241b15"/>
+      <stop offset="100%" stop-color="#140f0c"/>
+    </linearGradient>
+
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- App Icon Squircle Base -->
+  <rect x="20" y="20" width="472" height="472" rx="108" fill="url(#tileBg)" stroke="#2e2116" stroke-width="6"/>
+
+  <!-- Subtle Ambient Glow behind the grid -->
+  <circle cx="256" cy="256" r="140" fill="#f59e0b" opacity="0.1" filter="url(#softGlow)"/>
+
+  <!-- 3x3 Cube Grid with the Iconic Algorithm Slash (Gap: 20px, Size: 86px) -->
+  <g>
+    <!-- ROW 1 -->
+    <!-- Col 1: Active Amber -->
+    <rect x="107" y="107" width="86" height="86" rx="18" fill="url(#amberSticker)"/>
+    <!-- Col 2: Active Amber -->
+    <rect x="213" y="107" width="86" height="86" rx="18" fill="url(#amberSticker)"/>
+    <!-- Col 3: Cut (Slash) -->
+    <rect x="319" y="107" width="86" height="86" rx="18" fill="url(#cutSticker)" stroke="#38291e" stroke-width="4"/>
+
+    <!-- ROW 2 -->
+    <!-- Col 1: Active Amber -->
+    <rect x="107" y="213" width="86" height="86" rx="18" fill="url(#amberSticker)"/>
+    <!-- Col 2: Cut (Slash) -->
+    <rect x="213" y="213" width="86" height="86" rx="18" fill="url(#cutSticker)" stroke="#38291e" stroke-width="4"/>
+    <!-- Col 3: Active Amber -->
+    <rect x="319" y="213" width="86" height="86" rx="18" fill="url(#amberSticker)"/>
+
+    <!-- ROW 3 -->
+    <!-- Col 1: Cut (Slash) -->
+    <rect x="107" y="319" width="86" height="86" rx="18" fill="url(#cutSticker)" stroke="#38291e" stroke-width="4"/>
+    <!-- Col 2: Active Amber -->
+    <rect x="213" y="319" width="86" height="86" rx="18" fill="url(#amberSticker)"/>
+    <!-- Col 3: Active Amber -->
+    <rect x="319" y="319" width="86" height="86" rx="18" fill="url(#amberSticker)"/>
+  </g>
+</svg>
