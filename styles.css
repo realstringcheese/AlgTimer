@@ -429,3 +429,18 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance
 .st-red { background: #ef4444; }
 .st-yellow { background: #eab308; }
 .st-green { background: #22c55e; }
+
+/* === V1.0.0 RELEASE BADGE === */
+.version-badge {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  margin-left: 0.3rem;
+  letter-spacing: 0.04em;
+  user-select: none;
+}
